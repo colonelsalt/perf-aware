@@ -20,24 +20,29 @@ def Decode(FileName : str):
     Bytes = list(InFile.read())
 
     OutLines = []
-    OutLines.append("bits 16\n")
+    OutLines.append("bits 16\n\n")
 
-    assert Bytes[0] & (0b0100010 << 2) # Check this is definitely a mov instruction
-    assert len(Bytes) == 2
+    assert len(Bytes) % 2 == 0
 
-    DBit = (Bytes[0] & (1 << 1)) >> 1
-    WideBit = Bytes[0] & 1
-    RegField = (Bytes[1] & ((1 << 5) | (1 << 4) | (1 << 3))) >> 3
-    RMField = Bytes[1] & ((1 << 2) | (1 << 1) | 1)
+    for i in range(0, len(Bytes) - 1, 2):
+        Byte0 = Bytes[i]
+        Byte1 = Bytes[i + 1]
 
-    if DBit:
-        SrcReg = REG_NAME_MAP[RMField][WideBit]
-        DestReg = REG_NAME_MAP[RegField][WideBit]
-    else:
-        SrcReg = REG_NAME_MAP[RegField][WideBit]
-        DestReg = REG_NAME_MAP[RMField][WideBit]
+        assert Byte0 & (0b0100010 << 2) # Check this is definitely a mov instruction
+    
+        DBit = (Byte0 & (1 << 1)) >> 1
+        WideBit = Byte0 & 1
+        RegField = (Byte1 & ((1 << 5) | (1 << 4) | (1 << 3))) >> 3
+        RMField = Byte1 & ((1 << 2) | (1 << 1) | 1)
+        
+        if DBit:
+            SrcReg = REG_NAME_MAP[RMField][WideBit]
+            DestReg = REG_NAME_MAP[RegField][WideBit]
+        else:
+            SrcReg = REG_NAME_MAP[RegField][WideBit]
+            DestReg = REG_NAME_MAP[RMField][WideBit]
 
-    OutLines.append(f"mov {DestReg}, {SrcReg}\n")
+        OutLines.append(f"mov {DestReg}, {SrcReg}\n")
 
     IndexOfLastSlash = FileName.rfind('/')
     OutFileName = FileName[0:IndexOfLastSlash + 1]
