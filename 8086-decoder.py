@@ -14,6 +14,10 @@ REG_NAME_MAP = [
     ["bh", "di"]
 ]
 
+IMM_TO_REG_MASK = 0b1011 << 4
+MEMREG_TO_REG_MASK = 0b100010 << 2
+IMM_TO_REGMEM_MASK = 0b1100011 << 1
+
 def Decode(FileName : str):
     InFile = open(FileName, mode="rb")
 
@@ -22,27 +26,49 @@ def Decode(FileName : str):
     OutLines = []
     OutLines.append("bits 16\n\n")
 
-    assert len(Bytes) % 2 == 0
+    ByteIndex = 0
+    while ByteIndex < len(Bytes):
+        Byte0 = Bytes[ByteIndex]
+        ByteIndex += 1
 
-    for i in range(0, len(Bytes) - 1, 2):
-        Byte0 = Bytes[i]
-        Byte1 = Bytes[i + 1]
+        if Byte0 & IMM_TO_REG_MASK == IMM_TO_REG_MASK:
+            # Immediate to register
+            Byte1 = Bytes[ByteIndex]
+            ByteIndex += 1
 
-        assert Byte0 & (0b0100010 << 2) # Check this is definitely a mov instruction
-    
-        DBit = (Byte0 & (1 << 1)) >> 1
-        WideBit = Byte0 & 1
-        RegField = (Byte1 & ((1 << 5) | (1 << 4) | (1 << 3))) >> 3
-        RMField = Byte1 & ((1 << 2) | (1 << 1) | 1)
-        
-        if DBit:
-            SrcReg = REG_NAME_MAP[RMField][WideBit]
+            WideBit = (Byte0 & (1 << 3)) >> 3
+            RegField = Byte0 & 0b111
             DestReg = REG_NAME_MAP[RegField][WideBit]
-        else:
-            SrcReg = REG_NAME_MAP[RegField][WideBit]
-            DestReg = REG_NAME_MAP[RMField][WideBit]
 
-        OutLines.append(f"mov {DestReg}, {SrcReg}\n")
+            Data = Byte1
+            if WideBit:
+                Byte2 = Bytes[ByteIndex]
+                ByteIndex += 1
+
+                Data |= (Byte2 << 8)
+            OutLines.append(f"mov {DestReg}, {Data}\n")
+        elif Byte0 & MEMREG_TO_REG_MASK == MEMREG_TO_REG_MASK:
+            # Memory/register to register
+            Byte1 = Bytes[ByteIndex]
+            ByteIndex += 1
+
+            DBit = (Byte0 & (1 << 1)) >> 1
+            WideBit = Byte0 & 1
+            RegField = (Byte1 & ((1 << 5) | (1 << 4) | (1 << 3))) >> 3
+            RMField = Byte1 & ((1 << 2) | (1 << 1) | 1)
+            
+            if DBit:
+                SrcReg = REG_NAME_MAP[RMField][WideBit]
+                DestReg = REG_NAME_MAP[RegField][WideBit]
+            else:
+                SrcReg = REG_NAME_MAP[RegField][WideBit]
+                DestReg = REG_NAME_MAP[RMField][WideBit]
+
+            OutLines.append(f"mov {DestReg}, {SrcReg}\n")
+        elif Byte0 & IMM_TO_REGMEM_MASK == IMM_TO_REGMEM_MASK:
+            # Immediate to register/memory
+            pass
+        
 
     IndexOfLastSlash = FileName.rfind('/')
     OutFileName = FileName[0:IndexOfLastSlash + 1]
