@@ -1,0 +1,29 @@
+100010dw # MOV: RegMem to RegMem
+1100011w # MOV: Imm to RegMem
+1011wreg # MOV: Imm to Reg
+1010000w # MOV: Mem to Acc
+1010001w # MOV: Acc to Mem 
+
+000000dw # ADD: RegMem to RegMem
+100000sw # ADD: Imm to RegMem
+0000010w # ADD: Imm to Acc
+
+001010dw # SUB: RegMem to RegMem
+100000sw # SUB: Imm to RegMem
+0010110w # SUB: Imm to Acc
+
+001110dw # CMP: RegMem to RegMem
+100000sw # CMP: Imm to RegMem
+0011110w # CMP: Imm to Acc
+
+
+Add signature: 000
+Sub signature: 101
+Cmp signature: 111
+
+
+1100011w # MOV: Imm to RegMem
+100000sw # ADD: Imm to RegMem
+100000sw # SUB: Imm to RegMem
+100000sw # CMP: Imm to RegMem
+

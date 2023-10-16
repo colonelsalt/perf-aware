@@ -18,7 +18,7 @@ def GetDisplacementFormula(Mod : int, RMField : int, Bytes : [int], ByteIndex : 
     AddressReg = OffsetReg = Disp = DispSign = None
     if Mod != 0b11:
         if Mod == 0 and RMField == 0b110:
-            # TODO: 16-bit direct address
+            # 16-bit direct address
             Byte2 = Bytes[ByteIndex]
             ByteIndex += 1
             Byte3 = Bytes[ByteIndex]
@@ -91,10 +91,26 @@ def GetDisplacementFormula(Mod : int, RMField : int, Bytes : [int], ByteIndex : 
         # No displacement (reg-to-reg)
         return None, None, None, None, ByteIndex
 
-IMM_TO_REG_MASK = 0b1011 << 4
-MEMREG_TO_MEMREG_MASK = 0b100010 << 2
-IMM_TO_REGMEM_MASK = 0b1100011 << 1
-ACC_OP_MASK = 0b101000 << 2
+MOV_IMM_TO_REG_MASK = 0b1011 << 4
+
+MOV_MEMREG_TO_MEMREG_MASK = 0b100010
+ADD_MEMREG_TO_MEMREG_MASK = 0b000000
+SUB_MEMREG_TO_MEMREG_MASK = 0b001010
+CMP_MEMREG_TO_MEMREG_MASK = 0b001110
+
+MOV_IMM_TO_REGMEM_MASK = 0b1100011
+DEF_IMM_TO_REGMEM_MASK = 0b100000
+
+MOV_ACC_OP_MASK = 0b101000
+
+ADD_IMM_TO_ACC_MASK = 0b0000010
+SUB_IMM_TO_ACC_MASK = 0b0010110
+CMP_IMM_TO_ACC_MASK = 0b0011110
+
+
+ADD_PATTERN = 0b000
+SUB_PATTERN = 0b101
+CMP_PATTERN = 0b111
 
 def Decode(FileName : str):
     InFile = open(FileName, mode="rb")
@@ -109,7 +125,7 @@ def Decode(FileName : str):
         Byte0 = Bytes[ByteIndex]
         ByteIndex += 1
 
-        if Byte0 & IMM_TO_REG_MASK == IMM_TO_REG_MASK:
+        if Byte0 >> 2 == MOV_IMM_TO_REG_MASK:
             # Immediate to register
             Byte1 = Bytes[ByteIndex]
             ByteIndex += 1
@@ -125,7 +141,10 @@ def Decode(FileName : str):
 
                 Data |= (Byte2 << 8)
             OutLines.append(f"mov {DestReg}, {Data}\n")
-        elif Byte0 & MEMREG_TO_MEMREG_MASK == MEMREG_TO_MEMREG_MASK:
+        elif Byte0 >> 2 == MOV_MEMREG_TO_MEMREG_MASK or\
+             Byte0 >> 2 == 0 or\
+             Byte0 >> 2 == SUB_MEMREG_TO_MEMREG_MASK or\
+             Byte0 >> 2 == CMP_MEMREG_TO_MEMREG_MASK:
             # Memory/register to register
             Byte1 = Bytes[ByteIndex]
             ByteIndex += 1
@@ -137,41 +156,52 @@ def Decode(FileName : str):
             RMField = Byte1 & ((1 << 2) | (1 << 1) | 1)
             
             AddressReg, OffsetReg, Disp, DispSign, ByteIndex = GetDisplacementFormula(Mod, RMField, Bytes, ByteIndex)
+            
+            OpPattern = (Byte0 >> 3) & 0b111
+
+            if OpPattern == CMP_PATTERN:
+                Op = "cmp"
+            elif OpPattern == SUB_PATTERN:
+                Op = "sub"
+            elif OpPattern == ADD_PATTERN:
+                Op = "add"
+            else:
+                Op = "mov"
 
             if Mod != 0b11:
                 if Mod == 0 and RMField == 0b110:
                     # 16-bit direct address
                     DestReg = REG_NAME_MAP[RegField][WideBit]
-                    OutLines.append(f"mov {DestReg}, [{Disp}]\n")
+                    OutLines.append(f"{Op} {DestReg}, [{Disp}]\n")
                     continue
                 if Mod == 0:
                     # No displacement
                     if DBit:
                         DestReg = REG_NAME_MAP[RegField][WideBit]
                         if OffsetReg:
-                            OutLines.append(f"mov {DestReg}, [{AddressReg} + {OffsetReg}]\n")
+                            OutLines.append(f"{Op} {DestReg}, [{AddressReg} + {OffsetReg}]\n")
                         else:
-                            OutLines.append(f"mov {DestReg}, [{AddressReg}]\n")
+                            OutLines.append(f"{Op} {DestReg}, [{AddressReg}]\n")
                     else:
                         SrcReg = REG_NAME_MAP[RegField][WideBit]
                         if OffsetReg:
-                            OutLines.append(f"mov [{AddressReg} + {OffsetReg}], {SrcReg}\n")
+                            OutLines.append(f"{Op} [{AddressReg} + {OffsetReg}], {SrcReg}\n")
                         else:
-                            OutLines.append(f"mov [{AddressReg}], {SrcReg}\n")
+                            OutLines.append(f"{Op} [{AddressReg}], {SrcReg}\n")
                 elif Mod == 0b01 or Mod == 0b10:
                     # 8/16-bit displacement
                     if DBit:
                         DestReg = REG_NAME_MAP[RegField][WideBit]
                         if OffsetReg:
-                            OutLines.append(f"mov {DestReg}, [{AddressReg} + {OffsetReg} {DispSign} {Disp}]\n")
+                            OutLines.append(f"{Op} {DestReg}, [{AddressReg} + {OffsetReg} {DispSign} {Disp}]\n")
                         else:
-                            OutLines.append(f"mov {DestReg}, [{AddressReg} {DispSign} {Disp}]\n")
+                            OutLines.append(f"{Op} {DestReg}, [{AddressReg} {DispSign} {Disp}]\n")
                     else:
                         SrcReg = REG_NAME_MAP[RegField][WideBit]
                         if OffsetReg:
-                            OutLines.append(f"mov [{AddressReg} + {OffsetReg} {DispSign} {Disp}], {SrcReg}\n")
+                            OutLines.append(f"{Op} [{AddressReg} + {OffsetReg} {DispSign} {Disp}], {SrcReg}\n")
                         else:
-                            OutLines.append(f"mov [{AddressReg} {DispSign} {Disp}], {SrcReg}\n")
+                            OutLines.append(f"{Op} [{AddressReg} {DispSign} {Disp}], {SrcReg}\n")
             else:
                 # No displacement (reg-to-reg)
                 if DBit:
@@ -180,17 +210,35 @@ def Decode(FileName : str):
                 else:
                     SrcReg = REG_NAME_MAP[RegField][WideBit]
                     DestReg = REG_NAME_MAP[RMField][WideBit]
-                OutLines.append(f"mov {DestReg}, {SrcReg}\n")
+                OutLines.append(f"{Op} {DestReg}, {SrcReg}\n")
 
 
-        elif Byte0 & IMM_TO_REGMEM_MASK == IMM_TO_REGMEM_MASK:
+        elif Byte0 >> 1 == MOV_IMM_TO_REGMEM_MASK or\
+             Byte0 >> 2 == DEF_IMM_TO_REGMEM_MASK:
             # Immediate to register/memory
             Byte1 = Bytes[ByteIndex]
             ByteIndex += 1
             
+            OpPattern = (Byte1 >> 3) & 0b111
+            Op = "ERROR"
+            if Byte0 & MOV_IMM_TO_REGMEM_MASK == MOV_IMM_TO_REGMEM_MASK:
+                Op = "mov"
+            elif OpPattern == ADD_PATTERN:
+                Op = "add"
+            elif OpPattern == SUB_PATTERN:
+                Op = "sub"
+            elif OpPattern == CMP_PATTERN:
+                Op = "cmp"
+
             WideBit = Byte0 & 1
             Mod = Byte1 >> 6
             RMField = Byte1 & 0b111
+
+            if Op == "mov":
+                SignBit = 0
+            else:
+                SignBit = (Byte0 >> 1) & 1
+            SW = (SignBit << 1) | WideBit
 
             if WideBit:
                 DataType = "word"
@@ -202,7 +250,7 @@ def Decode(FileName : str):
             Immediate = Bytes[ByteIndex]
             ByteIndex += 1
 
-            if WideBit:
+            if SW == 0b01:
                 ImmHigh = Bytes[ByteIndex]
                 ByteIndex += 1
 
@@ -210,38 +258,58 @@ def Decode(FileName : str):
             if AddressReg is None:
                 # Moving immediate into register
                 DestReg = REG_NAME_MAP[RMField][WideBit]
-                OutLines.append(f"mov {DestReg}, {Immediate}\n")
+                OutLines.append(f"{Op} {DestReg}, {Immediate}\n")
             else:
                 if OffsetReg is None:
                     if Disp is None:
-                        OutLines.append(f"mov [{AddressReg}], {DataType} {Immediate}\n")
+                        OutLines.append(f"{Op} [{AddressReg}], {DataType} {Immediate}\n")
                     else:
-                        OutLines.append(f"mov [{AddressReg} {DispSign} {Disp}], {DataType} {Immediate}\n")
+                        OutLines.append(f"{Op} [{AddressReg} {DispSign} {Disp}], {DataType} {Immediate}\n")
                 else:
                     if Disp is None:
-                        OutLines.append(f"mov [{AddressReg} + {OffsetReg}], {DataType} {Immediate}\n")
+                        OutLines.append(f"{Op} [{AddressReg} + {OffsetReg}], {DataType} {Immediate}\n")
                     else:
-                        OutLines.append(f"mov [{AddressReg} + {OffsetReg} {DispSign} {Disp}], {DataType} {Immediate}\n")
-        elif Byte0 & ACC_OP_MASK == ACC_OP_MASK:
+                        OutLines.append(f"{Op} [{AddressReg} + {OffsetReg} {DispSign} {Disp}], {DataType} {Immediate}\n")
+        elif Byte0 >> 2 == MOV_ACC_OP_MASK or\
+             Byte0 >> 1 == ADD_IMM_TO_ACC_MASK or\
+             Byte0 >> 1 == SUB_IMM_TO_ACC_MASK or\
+             Byte0 >> 1 == CMP_IMM_TO_ACC_MASK:
             WideBit = Byte0 & 1
             if WideBit:
                 Reg = "ax"
             else:
                 Reg = "al"
+            
+            OpPattern = Byte0 >> 3
+            if OpPattern == ADD_PATTERN:
+                Op = "add"
+            elif OpPattern == SUB_PATTERN:
+                Op = "sub"
+            elif OpPattern == CMP_PATTERN:
+                Op = "cmp"
+            else:
+                Op = "mov"
 
             Byte1 = Bytes[ByteIndex]
             ByteIndex += 1
-            Byte2 = Bytes[ByteIndex]
-            ByteIndex += 1
 
-            Addr = (Byte2 << 8) | Byte1
+            if Op == "mov" or WideBit:
+                Byte2 = Bytes[ByteIndex]
+                ByteIndex += 1
 
-            if Byte0 & (1 << 1):
-                # Accumulator to memory
-                OutLines.append(f"mov [{Addr}], {Reg}\n")
+                Addr = (Byte2 << 8) | Byte1
             else:
-                # Memory to accumulator
-                OutLines.append(f"mov {Reg}, [{Addr}]\n")
+                Addr = Byte1
+
+            if Op == "mov":
+                if Byte0 & (1 << 1):
+                    # Accumulator to memory
+                    OutLines.append(f"mov [{Addr}], {Reg}\n")
+                else:
+                    # Memory to accumulator
+                    OutLines.append(f"mov {Reg}, [{Addr}]\n")
+            else:
+                OutLines.append(f"{Op} {Reg}, {Addr}\n")
 
     IndexOfLastSlash = FileName.rfind('/')
     OutFileName = FileName[0:IndexOfLastSlash + 1]
