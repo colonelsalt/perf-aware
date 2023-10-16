@@ -14,6 +14,14 @@ REG_NAME_MAP = [
     ["bh", "di"]
 ]
 
+JUMP_OP_TABLE = [
+    "jo", "jno", "jb", "jnb", "je", "jne", "jbe", "jnbe", "js", "jns", "jp", "jnp", "jl", "jnl", "jle", "jnle"
+]
+
+LOOP_OP_TABLE = [
+    "loopnz", "loopz", "loop", "jcxz"
+]
+
 def GetDisplacementFormula(Mod : int, RMField : int, Bytes : [int], ByteIndex : int):
     AddressReg = OffsetReg = Disp = DispSign = None
     if Mod != 0b11:
@@ -91,7 +99,7 @@ def GetDisplacementFormula(Mod : int, RMField : int, Bytes : [int], ByteIndex : 
         # No displacement (reg-to-reg)
         return None, None, None, None, ByteIndex
 
-MOV_IMM_TO_REG_MASK = 0b1011 << 4
+MOV_IMM_TO_REG_MASK = 0b1011
 
 MOV_MEMREG_TO_MEMREG_MASK = 0b100010
 ADD_MEMREG_TO_MEMREG_MASK = 0b000000
@@ -107,6 +115,8 @@ ADD_IMM_TO_ACC_MASK = 0b0000010
 SUB_IMM_TO_ACC_MASK = 0b0010110
 CMP_IMM_TO_ACC_MASK = 0b0011110
 
+JMP_PREFIX = 0b111
+LOOP_PREFIX = 0b111000
 
 ADD_PATTERN = 0b000
 SUB_PATTERN = 0b101
@@ -125,7 +135,7 @@ def Decode(FileName : str):
         Byte0 = Bytes[ByteIndex]
         ByteIndex += 1
 
-        if Byte0 >> 2 == MOV_IMM_TO_REG_MASK:
+        if Byte0 >> 4 == MOV_IMM_TO_REG_MASK:
             # Immediate to register
             Byte1 = Bytes[ByteIndex]
             ByteIndex += 1
@@ -221,7 +231,7 @@ def Decode(FileName : str):
             
             OpPattern = (Byte1 >> 3) & 0b111
             Op = "ERROR"
-            if Byte0 & MOV_IMM_TO_REGMEM_MASK == MOV_IMM_TO_REGMEM_MASK:
+            if Byte0 >> 1 == MOV_IMM_TO_REGMEM_MASK:
                 Op = "mov"
             elif OpPattern == ADD_PATTERN:
                 Op = "add"
@@ -310,6 +320,29 @@ def Decode(FileName : str):
                     OutLines.append(f"mov {Reg}, [{Addr}]\n")
             else:
                 OutLines.append(f"{Op} {Reg}, {Addr}\n")
+        elif Byte0 >> 4 == JMP_PREFIX:
+            Byte1 = Bytes[ByteIndex]
+            ByteIndex += 1
+
+            if Byte1 > 127:
+                Offset = Byte1 - 256
+            else:
+                Offset = Byte1
+
+            Op = JUMP_OP_TABLE[Byte0 & 0b1111]
+            OutLines.append(f"{Op} label; {Offset}\n")
+        elif Byte0 >> 2 == LOOP_PREFIX:
+            Byte1 = Bytes[ByteIndex]
+            ByteIndex += 1
+
+            if Byte1 > 127:
+                Offset = Byte1 - 256
+            else:
+                Offset = Byte1
+
+            Op = LOOP_OP_TABLE[Byte0 & 0b11]
+            OutLines.append(f"{Op} label; {Offset}\n")
+            
 
     IndexOfLastSlash = FileName.rfind('/')
     OutFileName = FileName[0:IndexOfLastSlash + 1]
