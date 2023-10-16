@@ -1,0 +1,21 @@
+01110000 JO =Jump on overflow
+01110001 JNO = Jump on not overflow
+01110010 JB/JNAE =Jump on below/notaboveorequal |
+01110011 JNB/JAE =Jump on not below/aboveorequal 
+01110100 JE/JZ=Jump on equal/zero 
+01110101 JNE/JNZ = Jump on not equal/not zer0 
+01110110 JBE/JNA = Jump on below or equai/not above 
+01110111 JNBE/JA = Jump on not below or equal/above
+01111000 JS =Jump on sign 
+01111001 JNS = Jump on not sign
+01111010 JP/JPE = Jump on parity/parity even 
+01111011 JNP/JPO = Jump on not par/par odd
+01111100 JL/JNGE =Jump on less/not greater or equal 
+01111101 JNL/JGE = Jump on not less/greater orqual 
+01111110 JLE/JNG = Jump on less or equal/not greater 
+01111111 JNLE/JG = Jump on not less or equal/greater
+
+11100000 LOOPNZ/LOOPNE
+11100001 LOOPZ/LOOPE
+11100010 LOOP
+11100011 JCXZ
