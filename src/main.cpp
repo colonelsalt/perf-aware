@@ -56,7 +56,7 @@ void PrintRegContents(reg_contents* Regs)
 		Reg.Index = i;
 		Reg.Count = 2;
 
-		printf("\t%s: 0x%x (%d)\n", GetRegName(Reg), Regs[i].Extended, Regs[i].Extended);
+		printf("\t%s: 0x%04x (%d)\n", GetRegName(Reg), Regs[i].Extended, Regs[i].Extended);
 	}
 }
 
@@ -83,13 +83,19 @@ void Simulate(instruction Instruction, reg_contents* RegContents)
 	{
 		if (Instruction.Operands[0].Type == Operand_Register)
 		{
-			register_access Reg = Instruction.Operands[0].Register;
+			register_access DestReg = Instruction.Operands[0].Register;
+			Assert(DestReg.Index > Register_none && DestReg.Index < Register_count);
 			if (Instruction.Operands[1].Type == Operand_Immediate)
 			{
 				immediate Immediate = Instruction.Operands[1].Immediate;
-				Assert(Reg.Index > Register_none && Reg.Index < Register_count);
+				RegContents[DestReg.Index].Extended = (u16)Immediate.Value;
+			}
+			else if (Instruction.Operands[1].Type == Operand_Register)
+			{
+				register_access SourceReg = Instruction.Operands[1].Register;
+				Assert(SourceReg.Index > Register_none && SourceReg.Index < Register_count);
 
-				RegContents[Reg.Index].Extended = (u16)Immediate.Value;
+				RegContents[DestReg.Index].Extended = RegContents[SourceReg.Index].Extended;
 			}
 			else
 			{
