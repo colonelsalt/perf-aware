@@ -88,14 +88,61 @@ void Simulate(instruction Instruction, reg_contents* RegContents)
 			if (Instruction.Operands[1].Type == Operand_Immediate)
 			{
 				immediate Immediate = Instruction.Operands[1].Immediate;
-				RegContents[DestReg.Index].Extended = (u16)Immediate.Value;
+				if (DestReg.Count == 2)
+				{
+					RegContents[DestReg.Index].Extended = (u16)Immediate.Value;
+				}
+				else
+				{
+					Assert(DestReg.Offset <= 1);
+					if (DestReg.Offset == 0)
+					{
+						RegContents[DestReg.Index].Low = (u8)Immediate.Value;
+					}
+					else
+					{
+						RegContents[DestReg.Index].High = (u8)Immediate.Value;
+					}
+				}
 			}
 			else if (Instruction.Operands[1].Type == Operand_Register)
 			{
 				register_access SourceReg = Instruction.Operands[1].Register;
 				Assert(SourceReg.Index > Register_none && SourceReg.Index < Register_count);
 
-				RegContents[DestReg.Index].Extended = RegContents[SourceReg.Index].Extended;
+				if (SourceReg.Count == 2)
+				{
+					RegContents[DestReg.Index].Extended = RegContents[SourceReg.Index].Extended;
+				}
+				else
+				{
+					Assert(SourceReg.Offset <= 1);
+					Assert(DestReg.Count < 2 && DestReg.Offset <= 1);
+
+					if (SourceReg.Offset == 0)
+					{
+						if (DestReg.Offset == 0)
+						{
+							RegContents[DestReg.Index].Low = RegContents[SourceReg.Index].Low;
+						}
+						else
+						{
+							RegContents[DestReg.Index].High = RegContents[SourceReg.Index].Low;
+						}
+					}
+					else
+					{
+						if (DestReg.Offset == 0)
+						{
+							RegContents[DestReg.Index].Low = RegContents[SourceReg.Index].High;
+						}
+						else
+						{
+							RegContents[DestReg.Index].High = RegContents[SourceReg.Index].High;
+						}
+					}
+				}
+
 			}
 			else
 			{
@@ -123,7 +170,7 @@ int main(int ArgCount, char** ArgV)
         return -1;
     }
 
-	if (ArgCount > 2)
+	if (ArgCount > 3)
 	{
 		printf("Usage, homie\n");
 		return 1;
@@ -131,7 +178,7 @@ int main(int ArgCount, char** ArgV)
 
 	char* FileName;
 	b32 ShouldExecute = false;
-	for (int i = 0; i < ArgCount; i++)
+	for (int i = 1; i < ArgCount; i++)
 	{
 		if (strcmp(ArgV[i], "-exec") == 0)
 		{
@@ -158,9 +205,12 @@ int main(int ArgCount, char** ArgV)
         {
             Offset += Decoded.Size;
 			PrintInstruction(Decoded);
-			printf(" ; ");
-			Simulate(Decoded, RegisterContents);
-			PrintRegDiff(RegisterContents, OldRegContents);
+			if (ShouldExecute)
+			{
+				printf(" ; ");
+				Simulate(Decoded, RegisterContents);
+				PrintRegDiff(RegisterContents, OldRegContents);
+			}
 			printf("\n");
         }
         else
@@ -169,10 +219,16 @@ int main(int ArgCount, char** ArgV)
             break;
         }
 
-		memcpy(OldRegContents, RegisterContents, sizeof(RegisterContents));
+		if (ShouldExecute)
+		{
+			memcpy(OldRegContents, RegisterContents, sizeof(RegisterContents));
+		}
     }
+		
+	if (ShouldExecute)
+	{
+		PrintRegContents(RegisterContents);
+	}
 
-	PrintRegContents(RegisterContents);
-    
     return 0;
 }
