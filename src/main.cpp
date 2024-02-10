@@ -74,7 +74,10 @@ void PrintRegContents(reg_contents* Regs)
 		Reg.Index = i;
 		Reg.Count = 2;
 
-		printf("\t%s: 0x%04x (%d)\n", GetRegName(Reg), Regs[i].Extended, Regs[i].Extended);
+		if (Regs[i].Extended != 0)
+		{
+			printf("\t%s: 0x%04x (%d)\n", GetRegName(Reg), Regs[i].Extended, Regs[i].Extended);
+		}
 	}
 	
 	printf("   flags: ");
@@ -102,6 +105,7 @@ void PrintRegDiff(reg_contents* RegsCurrent, reg_contents* RegsOld)
 
 	if (OldFlags != CurrFlags)
 	{
+		printf(" flags:");
 		PrintFlags(OldFlags);
 		printf("->");
 		PrintFlags(CurrFlags);
@@ -109,7 +113,48 @@ void PrintRegDiff(reg_contents* RegsCurrent, reg_contents* RegsOld)
 
 }
 
-void Perform8BitOp(u8* Dest, u8* Source, operation_type Op)
+void SetFlags8(u8 Value, u16* OutFlags)
+{
+	if (Value == 0)
+	{
+		*OutFlags |= Flag_ZF;
+	}
+	else
+	{
+		*OutFlags &= ~Flag_ZF;
+	}
+	if (Value & (1 << 7))
+	{
+		*OutFlags |= Flag_SF;
+	}
+	else
+	{
+		*OutFlags &= ~Flag_SF;
+	}
+}
+
+void SetFlags16(u16 Value, u16* OutFlags)
+{
+	if (Value == 0)
+	{
+		*OutFlags |= Flag_ZF;
+	}
+	else
+	{
+		*OutFlags &= ~Flag_ZF;
+	}
+	if (Value & (1 << 15))
+	{
+		*OutFlags |= Flag_SF;
+	}
+	else
+	{
+		*OutFlags &= ~Flag_SF;
+	}
+}
+
+
+void Perform8BitOp(u8* Dest, u8* Source, u16* OutFlags, operation_type Op)
 {
 	switch (Op)
 	{
@@ -120,11 +165,22 @@ void Perform8BitOp(u8* Dest, u8* Source, operation_type Op)
 		case Op_add:
 		{
 			*Dest += *Source;
+			SetFlags8(*Dest, OutFlags);
+		} break;
+		case Op_sub:
+		{
+			*Dest -= *Source;
+			SetFlags8(*Dest, OutFlags);
+		} break;
+		case Op_cmp:
+		{
+			u8 Value = *Dest - *Source;
+			SetFlags8(Value, OutFlags);
 		} break;
 	}
 }
 
-void Perform16BitOp(u16* Dest, u16* Source, operation_type Op)
+void Perform16BitOp(u16* Dest, u16* Source, u16* OutFlags, operation_type Op)
 {
 	switch (Op)
 	{
@@ -135,6 +191,17 @@ void Perform16BitOp(u16* Dest, u16* Source, operation_type Op)
 		case Op_add:
 		{
 			*Dest += *Source;
+			SetFlags16(*Dest, OutFlags);
+		} break;
+		case Op_sub:
+		{
+			*Dest -= *Source;
+			SetFlags16(*Dest, OutFlags);
+		} break;
+		case Op_cmp:
+		{
+			u16 Value = *Dest - *Source;
+			SetFlags16(Value, OutFlags);
 		} break;
 	}
 }
@@ -146,9 +213,11 @@ void RegToRegOp(register_access SourceReg, register_access DestReg, reg_contents
 
 	reg_contents* SourceVal = &RegContents[SourceReg.Index];
 	reg_contents* DestVal = &RegContents[DestReg.Index];
+	u16* Flags = &RegContents[Register_flags].Extended;
+
 	if (SourceReg.Count == 2)
 	{
-		Perform16BitOp(&DestVal->Extended, &SourceVal->Extended, Op);
+		Perform16BitOp(&DestVal->Extended, &SourceVal->Extended, Flags, Op);
 	}
 	else
 	{
@@ -159,22 +228,22 @@ void RegToRegOp(register_access SourceReg, register_access DestReg, reg_contents
 		{
 			if (DestReg.Offset == 0)
 			{
-				Perform8BitOp(&DestVal->Low, &SourceVal->Low, Op);
+				Perform8BitOp(&DestVal->Low, &SourceVal->Low, Flags, Op);
 			}
 			else
 			{
-				Perform8BitOp(&DestVal->High, &SourceVal->Low, Op);
+				Perform8BitOp(&DestVal->High, &SourceVal->Low, Flags, Op);
 			}
 		}
 		else
 		{
 			if (DestReg.Offset == 0)
 			{
-				Perform8BitOp(&DestVal->Low, &SourceVal->High, Op);
+				Perform8BitOp(&DestVal->Low, &SourceVal->High, Flags, Op);
 			}
 			else
 			{
-				Perform8BitOp(&DestVal->High, &SourceVal->High, Op);
+				Perform8BitOp(&DestVal->High, &SourceVal->High, Flags, Op);
 			}
 		}
 	}
@@ -184,10 +253,11 @@ void ImmToRegOp(immediate Immediate, register_access DestReg, reg_contents* RegC
 {
 	Assert(DestReg.Index > Register_none && DestReg.Index < Register_count);
 
+	u16* Flags = &RegContents[Register_flags].Extended;
 	reg_contents* DestVal = &RegContents[DestReg.Index];
 	if (DestReg.Count == 2)
 	{
-		Perform16BitOp(&DestVal->Extended, &((u16)Immediate.Value), Op);
+		Perform16BitOp(&DestVal->Extended, &((u16)Immediate.Value), Flags, Op);
 	}
 	else
 	{
@@ -196,11 +266,11 @@ void ImmToRegOp(immediate Immediate, register_access DestReg, reg_contents* RegC
 		u8 ImmVal = (u8)Immediate.Value;
 		if (DestReg.Offset == 0)
 		{
-			Perform8BitOp(&DestVal->Low, &ImmVal, Op);
+			Perform8BitOp(&DestVal->Low, &ImmVal, Flags, Op);
 		}
 		else
 		{
-			Perform8BitOp(&DestVal->High, &ImmVal, Op);
+			Perform8BitOp(&DestVal->High, &ImmVal, Flags, Op);
 		}
 	}
 }
