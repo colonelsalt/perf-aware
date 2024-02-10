@@ -37,6 +37,12 @@ u8* LoadFile(char* FileName, u32* OutFileSize)
 	return FileBuffer;
 }
 
+enum reg_flags
+{
+    Flag_ZF = (1 <<  6),
+    Flag_SF = (1 <<  7),
+};
+
 union reg_contents
 {
 	struct
@@ -47,10 +53,22 @@ union reg_contents
 	u16 Extended;
 };
 
+void PrintFlags(u16 RegFlags)
+{
+	if (RegFlags & Flag_ZF)
+	{
+		printf("Z");
+	}
+	if (RegFlags & Flag_SF)
+	{
+		printf("S");
+	}
+}
+
 void PrintRegContents(reg_contents* Regs)
 {
 	printf("\nFinal registers: \n");
-	for (u32 i = Register_a; i < Register_count; ++i)
+	for (u32 i = Register_a; i < Register_flags; ++i)
 	{
 		register_access Reg = {};
 		Reg.Index = i;
@@ -58,11 +76,15 @@ void PrintRegContents(reg_contents* Regs)
 
 		printf("\t%s: 0x%04x (%d)\n", GetRegName(Reg), Regs[i].Extended, Regs[i].Extended);
 	}
+	
+	printf("   flags: ");
+	PrintFlags(Regs[Register_flags].Extended);
+
 }
 
 void PrintRegDiff(reg_contents* RegsCurrent, reg_contents* RegsOld)
 {
-	for (u32 i = Register_a; i < Register_count; i++)
+	for (u32 i = Register_a; i < Register_flags; i++)
 	{
 		u16 OldVal = RegsOld[i].Extended;
 		u16 CurrVal = RegsCurrent[i].Extended;
@@ -75,79 +97,128 @@ void PrintRegDiff(reg_contents* RegsCurrent, reg_contents* RegsOld)
 			printf("%s:0x%x->0x%x ", GetRegName(Reg), OldVal, CurrVal);
 		}
 	}
+	u16 OldFlags = RegsOld[Register_flags].Extended;
+	u16 CurrFlags = RegsCurrent[Register_flags].Extended;
+
+	if (OldFlags != CurrFlags)
+	{
+		PrintFlags(OldFlags);
+		printf("->");
+		PrintFlags(CurrFlags);
+	}
+
+}
+
+void Perform8BitOp(u8* Dest, u8* Source, operation_type Op)
+{
+	switch (Op)
+	{
+		case Op_mov:
+		{
+			*Dest = *Source;
+		} break;
+		case Op_add:
+		{
+			*Dest += *Source;
+		} break;
+	}
+}
+
+void Perform16BitOp(u16* Dest, u16* Source, operation_type Op)
+{
+	switch (Op)
+	{
+		case Op_mov:
+		{
+			*Dest = *Source;
+		} break;
+		case Op_add:
+		{
+			*Dest += *Source;
+		} break;
+	}
+}
+
+void RegToRegOp(register_access SourceReg, register_access DestReg, reg_contents* RegContents, operation_type Op)
+{
+	Assert(SourceReg.Index > Register_none && SourceReg.Index < Register_count);
+	Assert(DestReg.Index > Register_none && DestReg.Index < Register_count);
+
+	reg_contents* SourceVal = &RegContents[SourceReg.Index];
+	reg_contents* DestVal = &RegContents[DestReg.Index];
+	if (SourceReg.Count == 2)
+	{
+		Perform16BitOp(&DestVal->Extended, &SourceVal->Extended, Op);
+	}
+	else
+	{
+		Assert(SourceReg.Offset <= 1);
+		Assert(DestReg.Count < 2 && DestReg.Offset <= 1);
+
+		if (SourceReg.Offset == 0)
+		{
+			if (DestReg.Offset == 0)
+			{
+				Perform8BitOp(&DestVal->Low, &SourceVal->Low, Op);
+			}
+			else
+			{
+				Perform8BitOp(&DestVal->High, &SourceVal->Low, Op);
+			}
+		}
+		else
+		{
+			if (DestReg.Offset == 0)
+			{
+				Perform8BitOp(&DestVal->Low, &SourceVal->High, Op);
+			}
+			else
+			{
+				Perform8BitOp(&DestVal->High, &SourceVal->High, Op);
+			}
+		}
+	}
+}
+
+void ImmToRegOp(immediate Immediate, register_access DestReg, reg_contents* RegContents, operation_type Op)
+{
+	Assert(DestReg.Index > Register_none && DestReg.Index < Register_count);
+
+	reg_contents* DestVal = &RegContents[DestReg.Index];
+	if (DestReg.Count == 2)
+	{
+		Perform16BitOp(&DestVal->Extended, &((u16)Immediate.Value), Op);
+	}
+	else
+	{
+		Assert(DestReg.Offset <= 1);
+		
+		u8 ImmVal = (u8)Immediate.Value;
+		if (DestReg.Offset == 0)
+		{
+			Perform8BitOp(&DestVal->Low, &ImmVal, Op);
+		}
+		else
+		{
+			Perform8BitOp(&DestVal->High, &ImmVal, Op);
+		}
+	}
 }
 
 void Simulate(instruction Instruction, reg_contents* RegContents)
 {
-	if (Instruction.Op == Op_mov)
+	if (Instruction.Operands[0].Type == Operand_Register)
 	{
-		if (Instruction.Operands[0].Type == Operand_Register)
+		register_access DestReg = Instruction.Operands[0].Register;
+		if (Instruction.Operands[1].Type == Operand_Immediate)
 		{
-			register_access DestReg = Instruction.Operands[0].Register;
-			Assert(DestReg.Index > Register_none && DestReg.Index < Register_count);
-			if (Instruction.Operands[1].Type == Operand_Immediate)
-			{
-				immediate Immediate = Instruction.Operands[1].Immediate;
-				if (DestReg.Count == 2)
-				{
-					RegContents[DestReg.Index].Extended = (u16)Immediate.Value;
-				}
-				else
-				{
-					Assert(DestReg.Offset <= 1);
-					if (DestReg.Offset == 0)
-					{
-						RegContents[DestReg.Index].Low = (u8)Immediate.Value;
-					}
-					else
-					{
-						RegContents[DestReg.Index].High = (u8)Immediate.Value;
-					}
-				}
-			}
-			else if (Instruction.Operands[1].Type == Operand_Register)
-			{
-				register_access SourceReg = Instruction.Operands[1].Register;
-				Assert(SourceReg.Index > Register_none && SourceReg.Index < Register_count);
-
-				if (SourceReg.Count == 2)
-				{
-					RegContents[DestReg.Index].Extended = RegContents[SourceReg.Index].Extended;
-				}
-				else
-				{
-					Assert(SourceReg.Offset <= 1);
-					Assert(DestReg.Count < 2 && DestReg.Offset <= 1);
-
-					if (SourceReg.Offset == 0)
-					{
-						if (DestReg.Offset == 0)
-						{
-							RegContents[DestReg.Index].Low = RegContents[SourceReg.Index].Low;
-						}
-						else
-						{
-							RegContents[DestReg.Index].High = RegContents[SourceReg.Index].Low;
-						}
-					}
-					else
-					{
-						if (DestReg.Offset == 0)
-						{
-							RegContents[DestReg.Index].Low = RegContents[SourceReg.Index].High;
-						}
-						else
-						{
-							RegContents[DestReg.Index].High = RegContents[SourceReg.Index].High;
-						}
-					}
-				}
-
-			}
-			else
-			{
-				// TODO...
-			}
+			immediate Immediate = Instruction.Operands[1].Immediate;
+			ImmToRegOp(Immediate, DestReg, RegContents, Instruction.Op);
+		}
+		else if (Instruction.Operands[1].Type == Operand_Register)
+		{
+			register_access SourceReg = Instruction.Operands[1].Register;
+			RegToRegOp(SourceReg, DestReg, RegContents, Instruction.Op);
 		}
 		else
 		{
