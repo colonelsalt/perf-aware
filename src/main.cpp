@@ -110,7 +110,6 @@ void PrintRegDiff(reg_contents* RegsCurrent, reg_contents* RegsOld)
 		printf("->");
 		PrintFlags(CurrFlags);
 	}
-
 }
 
 void SetFlags8(u8 Value, u16* OutFlags)
@@ -275,20 +274,28 @@ void ImmToRegOp(immediate Immediate, register_access DestReg, reg_contents* RegC
 	}
 }
 
-void Simulate(instruction Instruction, reg_contents* RegContents)
+u32 Simulate(instruction Instruction, reg_contents* RegContents)
 {
-	if (Instruction.Operands[0].Type == Operand_Register)
+	RegContents[Register_ip].Extended += Instruction.Size;
+	if (Instruction.Op < Op_jmp)
 	{
-		register_access DestReg = Instruction.Operands[0].Register;
-		if (Instruction.Operands[1].Type == Operand_Immediate)
+		if (Instruction.Operands[0].Type == Operand_Register)
 		{
-			immediate Immediate = Instruction.Operands[1].Immediate;
-			ImmToRegOp(Immediate, DestReg, RegContents, Instruction.Op);
-		}
-		else if (Instruction.Operands[1].Type == Operand_Register)
-		{
-			register_access SourceReg = Instruction.Operands[1].Register;
-			RegToRegOp(SourceReg, DestReg, RegContents, Instruction.Op);
+			register_access DestReg = Instruction.Operands[0].Register;
+			if (Instruction.Operands[1].Type == Operand_Immediate)
+			{
+				immediate Immediate = Instruction.Operands[1].Immediate;
+				ImmToRegOp(Immediate, DestReg, RegContents, Instruction.Op);
+			}
+			else if (Instruction.Operands[1].Type == Operand_Register)
+			{
+				register_access SourceReg = Instruction.Operands[1].Register;
+				RegToRegOp(SourceReg, DestReg, RegContents, Instruction.Op);
+			}
+			else
+			{
+				// TODO...
+			}
 		}
 		else
 		{
@@ -297,10 +304,28 @@ void Simulate(instruction Instruction, reg_contents* RegContents)
 	}
 	else
 	{
-		// TODO...
+		// We assume this is a jump instruction of some kind
+		if (Instruction.Op == Op_jne)
+		{
+			Assert(Instruction.Operands[0].Type == Operand_Immediate);
+
+			if (!(RegContents[Register_flags].Extended & Flag_ZF))
+			{
+				s32 JumpOffset = Instruction.Operands[0].Immediate.Value;
+				// This seems to work, but I'm slightly concerned about the signed/unsigned mixing...
+				RegContents[Register_ip].Extended += (u16)JumpOffset;
+			}
+		}
 	}
+
+	return RegContents[Register_ip].Extended;
 }
 
+struct list_node
+{
+	instruction Instruction;
+	list_node* Next;
+};
 
 int main(int ArgCount, char** ArgV)
 {
@@ -344,12 +369,11 @@ int main(int ArgCount, char** ArgV)
         Sim86_Decode8086Instruction(FileSize - Offset, FileBuffer + Offset, &Decoded);
         if(Decoded.Op)
         {
-            Offset += Decoded.Size;
 			PrintInstruction(Decoded);
 			if (ShouldExecute)
 			{
 				printf(" ; ");
-				Simulate(Decoded, RegisterContents);
+				Offset = Simulate(Decoded, RegisterContents);
 				PrintRegDiff(RegisterContents, OldRegContents);
 			}
 			printf("\n");
