@@ -11,6 +11,10 @@ struct segmented_access;
 #include "sim86_decode.h"
 #include "decode_print.cpp"
 
+static constexpr u32 MEMORY_SIZE = 65'536; // 64kB
+static u8 s_Memory[MEMORY_SIZE];
+
+
 u8* LoadFile(char* FileName, u32* OutFileSize)
 {
 	FILE* File = fopen(FileName, "rb");
@@ -274,9 +278,60 @@ void ImmToRegOp(immediate Immediate, register_access DestReg, reg_contents* RegC
 	}
 }
 
-u32 Simulate(instruction Instruction, reg_contents* RegContents)
+u16 GetEffectiveAddress(effective_address_expression Address, reg_contents* RegContents)
+{
+	u16 Result = Address.Displacement;
+	for (int i = 0; i < 2; i++)
+	{
+		register_access EffReg = Address.Terms[i].Register;
+		if (EffReg.Index != Register_none)
+		{
+			Result += RegContents[EffReg.Index].Extended;
+		}
+	}
+	return Result;
+}
+
+u32 Simulate(instruction Instruction, reg_contents* RegContents, u8* Memory)
 {
 	RegContents[Register_ip].Extended += Instruction.Size;
+
+	if (Instruction.Op == Op_mov && (Instruction.Operands[0].Type == Operand_Memory || Instruction.Operands[1].Type == Operand_Memory))
+	{
+		if (Instruction.Operands[0].Type == Operand_Memory)
+		{
+			// Storing to memory
+			u16 MemoryAddr = GetEffectiveAddress(Instruction.Operands[0].Address, RegContents);
+			u8* MemoryLoc = Memory + MemoryAddr;
+
+			if (Instruction.Operands[1].Type == Operand_Immediate)
+			{
+				// Immediate to memory
+				*((u16*)(MemoryLoc)) = (u16)Instruction.Operands[1].Immediate.Value;
+			}
+			else
+			{
+				// Register to memory
+				Assert(Instruction.Operands[1].Type == Operand_Register);
+				register_access SourceReg = Instruction.Operands[1].Register;
+				*((u16*)(MemoryLoc)) = RegContents[SourceReg.Index].Extended;
+			}
+		}
+		else
+		{
+			// Loading from memory
+			Assert(Instruction.Operands[0].Type == Operand_Register);
+			Assert(Instruction.Operands[1].Type == Operand_Memory);
+
+			register_access DestRegister = Instruction.Operands[0].Register;
+			u16 MemoryAddr = GetEffectiveAddress(Instruction.Operands[1].Address, RegContents);
+			u8* MemoryLoc = Memory + MemoryAddr;
+
+			RegContents[DestRegister.Index].Extended = *((u16*)(MemoryLoc));
+		}
+	}
+	
+	
 	if (Instruction.Op < Op_jmp)
 	{
 		if (Instruction.Operands[0].Type == Operand_Register)
@@ -373,7 +428,7 @@ int main(int ArgCount, char** ArgV)
 			if (ShouldExecute)
 			{
 				printf(" ; ");
-				Offset = Simulate(Decoded, RegisterContents);
+				Offset = Simulate(Decoded, RegisterContents, s_Memory);
 				PrintRegDiff(RegisterContents, OldRegContents);
 			}
 			printf("\n");
