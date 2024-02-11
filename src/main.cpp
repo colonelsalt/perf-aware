@@ -157,53 +157,53 @@ void SetFlags16(u16 Value, u16* OutFlags)
 }
 
 
-void Perform8BitOp(u8* Dest, u8* Source, u16* OutFlags, operation_type Op)
+void Perform8BitOp(u8* Dest, u8 Source, u16* OutFlags, operation_type Op)
 {
 	switch (Op)
 	{
 		case Op_mov:
 		{
-			*Dest = *Source;
+			*Dest = Source;
 		} break;
 		case Op_add:
 		{
-			*Dest += *Source;
+			*Dest += Source;
 			SetFlags8(*Dest, OutFlags);
 		} break;
 		case Op_sub:
 		{
-			*Dest -= *Source;
+			*Dest -= Source;
 			SetFlags8(*Dest, OutFlags);
 		} break;
 		case Op_cmp:
 		{
-			u8 Value = *Dest - *Source;
+			u8 Value = *Dest - Source;
 			SetFlags8(Value, OutFlags);
 		} break;
 	}
 }
 
-void Perform16BitOp(u16* Dest, u16* Source, u16* OutFlags, operation_type Op)
+void Perform16BitOp(u16* Dest, u16 Source, u16* OutFlags, operation_type Op)
 {
 	switch (Op)
 	{
 		case Op_mov:
 		{
-			*Dest = *Source;
+			*Dest = Source;
 		} break;
 		case Op_add:
 		{
-			*Dest += *Source;
+			*Dest += Source;
 			SetFlags16(*Dest, OutFlags);
 		} break;
 		case Op_sub:
 		{
-			*Dest -= *Source;
+			*Dest -= Source;
 			SetFlags16(*Dest, OutFlags);
 		} break;
 		case Op_cmp:
 		{
-			u16 Value = *Dest - *Source;
+			u16 Value = *Dest - Source;
 			SetFlags16(Value, OutFlags);
 		} break;
 	}
@@ -220,7 +220,7 @@ void RegToRegOp(register_access SourceReg, register_access DestReg, reg_contents
 
 	if (SourceReg.Count == 2)
 	{
-		Perform16BitOp(&DestVal->Extended, &SourceVal->Extended, Flags, Op);
+		Perform16BitOp(&DestVal->Extended, SourceVal->Extended, Flags, Op);
 	}
 	else
 	{
@@ -231,22 +231,22 @@ void RegToRegOp(register_access SourceReg, register_access DestReg, reg_contents
 		{
 			if (DestReg.Offset == 0)
 			{
-				Perform8BitOp(&DestVal->Low, &SourceVal->Low, Flags, Op);
+				Perform8BitOp(&DestVal->Low, SourceVal->Low, Flags, Op);
 			}
 			else
 			{
-				Perform8BitOp(&DestVal->High, &SourceVal->Low, Flags, Op);
+				Perform8BitOp(&DestVal->High, SourceVal->Low, Flags, Op);
 			}
 		}
 		else
 		{
 			if (DestReg.Offset == 0)
 			{
-				Perform8BitOp(&DestVal->Low, &SourceVal->High, Flags, Op);
+				Perform8BitOp(&DestVal->Low, SourceVal->High, Flags, Op);
 			}
 			else
 			{
-				Perform8BitOp(&DestVal->High, &SourceVal->High, Flags, Op);
+				Perform8BitOp(&DestVal->High, SourceVal->High, Flags, Op);
 			}
 		}
 	}
@@ -260,7 +260,7 @@ void ImmToRegOp(immediate Immediate, register_access DestReg, reg_contents* RegC
 	reg_contents* DestVal = &RegContents[DestReg.Index];
 	if (DestReg.Count == 2)
 	{
-		Perform16BitOp(&DestVal->Extended, &((u16)Immediate.Value), Flags, Op);
+		Perform16BitOp(&DestVal->Extended, (u16)Immediate.Value, Flags, Op);
 	}
 	else
 	{
@@ -269,11 +269,11 @@ void ImmToRegOp(immediate Immediate, register_access DestReg, reg_contents* RegC
 		u8 ImmVal = (u8)Immediate.Value;
 		if (DestReg.Offset == 0)
 		{
-			Perform8BitOp(&DestVal->Low, &ImmVal, Flags, Op);
+			Perform8BitOp(&DestVal->Low, ImmVal, Flags, Op);
 		}
 		else
 		{
-			Perform8BitOp(&DestVal->High, &ImmVal, Flags, Op);
+			Perform8BitOp(&DestVal->High, ImmVal, Flags, Op);
 		}
 	}
 }
@@ -296,25 +296,29 @@ u32 Simulate(instruction Instruction, reg_contents* RegContents, u8* Memory)
 {
 	RegContents[Register_ip].Extended += Instruction.Size;
 
-	if (Instruction.Op == Op_mov && (Instruction.Operands[0].Type == Operand_Memory || Instruction.Operands[1].Type == Operand_Memory))
+	if (Instruction.Operands[0].Type == Operand_Memory || Instruction.Operands[1].Type == Operand_Memory)
 	{
+		u16* Flags = &RegContents[Register_flags].Extended;
 		if (Instruction.Operands[0].Type == Operand_Memory)
 		{
 			// Storing to memory
 			u16 MemoryAddr = GetEffectiveAddress(Instruction.Operands[0].Address, RegContents);
-			u8* MemoryLoc = Memory + MemoryAddr;
+			u16* MemoryLoc = (u16*)(Memory + MemoryAddr);
 
 			if (Instruction.Operands[1].Type == Operand_Immediate)
 			{
 				// Immediate to memory
-				*((u16*)(MemoryLoc)) = (u16)Instruction.Operands[1].Immediate.Value;
+				u16 Immval = (u16)Instruction.Operands[1].Immediate.Value;
+				Perform16BitOp(MemoryLoc, Immval, Flags, Instruction.Op);
 			}
 			else
 			{
 				// Register to memory
 				Assert(Instruction.Operands[1].Type == Operand_Register);
 				register_access SourceReg = Instruction.Operands[1].Register;
-				*((u16*)(MemoryLoc)) = RegContents[SourceReg.Index].Extended;
+				u16 RegVal = RegContents[SourceReg.Index].Extended;
+
+				Perform16BitOp(MemoryLoc, RegVal, Flags, Instruction.Op);
 			}
 		}
 		else
@@ -324,10 +328,11 @@ u32 Simulate(instruction Instruction, reg_contents* RegContents, u8* Memory)
 			Assert(Instruction.Operands[1].Type == Operand_Memory);
 
 			register_access DestRegister = Instruction.Operands[0].Register;
-			u16 MemoryAddr = GetEffectiveAddress(Instruction.Operands[1].Address, RegContents);
-			u8* MemoryLoc = Memory + MemoryAddr;
 
-			RegContents[DestRegister.Index].Extended = *((u16*)(MemoryLoc));
+			u16 MemoryAddr = GetEffectiveAddress(Instruction.Operands[1].Address, RegContents);
+			u16* MemoryLoc = (u16*)(Memory + MemoryAddr);
+
+			Perform16BitOp(&RegContents[DestRegister.Index].Extended, *MemoryLoc, Flags, Instruction.Op);
 		}
 	}
 	
