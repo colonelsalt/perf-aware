@@ -14,11 +14,9 @@ struct segmented_access;
 static constexpr u32 MEMORY_SIZE = 65'536; // 64kB
 static u8 s_Memory[MEMORY_SIZE];
 
-
-u8* LoadFile(char* FileName, u32* OutFileSize)
+void LoadFile(char* FileName, u8* Buffer, u32* OutFileSize)
 {
 	FILE* File = fopen(FileName, "rb");
-	u8* FileBuffer;
 	if (File)
 	{
 		u32 Start = ftell(File);
@@ -26,9 +24,7 @@ u8* LoadFile(char* FileName, u32* OutFileSize)
 		*OutFileSize = (u32)(ftell(File)) - Start;
 		fseek(File, 0, SEEK_SET);
 
-		FileBuffer = (u8*)malloc(*OutFileSize);
-
-		size_t BytesRead = fread(FileBuffer, 1, *OutFileSize, File);
+		size_t BytesRead = fread(Buffer, 1, *OutFileSize, File);
 		Assert(BytesRead == *OutFileSize);
 		fclose(File);
 	}
@@ -38,7 +34,6 @@ u8* LoadFile(char* FileName, u32* OutFileSize)
 		Assert(false);
 	}
 
-	return FileBuffer;
 }
 
 enum reg_flags
@@ -420,13 +415,13 @@ int main(int ArgCount, char** ArgV)
 	reg_contents OldRegContents[Register_count] = {0};
 
 	u32 FileSize;
-	u8* FileBuffer = LoadFile(FileName, &FileSize);
+	LoadFile(FileName, s_Memory, &FileSize);
 
     u32 Offset = 0;
     while(Offset < FileSize)
     {
         instruction Decoded;
-        Sim86_Decode8086Instruction(FileSize - Offset, FileBuffer + Offset, &Decoded);
+        Sim86_Decode8086Instruction(FileSize - Offset, s_Memory + Offset, &Decoded);
         if(Decoded.Op)
         {
 			PrintInstruction(Decoded);
