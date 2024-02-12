@@ -418,14 +418,23 @@ u32 Simulate(instruction Instruction, reg_contents* RegContents, u8* Memory)
 	else
 	{
 		// We assume this is a jump instruction of some kind
-		if (Instruction.Op == Op_jne)
+		if (Instruction.Op == Op_loop)
+		{
+			Assert(Instruction.Operands[0].Type == Operand_Immediate);
+			if (--RegContents[Register_c].Extended != 0)
+			{
+				s32 JumpOffset = Instruction.Operands[0].Immediate.Value;
+				// This seems to work, but I'm slightly concerned about the signed/unsigned mixing...
+				RegContents[Register_ip].Extended += (u16)JumpOffset;
+			}
+		}
+		else if (Instruction.Op == Op_jne)
 		{
 			Assert(Instruction.Operands[0].Type == Operand_Immediate);
 
 			if (!(RegContents[Register_flags].Extended & Flag_ZF))
 			{
 				s32 JumpOffset = Instruction.Operands[0].Immediate.Value;
-				// This seems to work, but I'm slightly concerned about the signed/unsigned mixing...
 				RegContents[Register_ip].Extended += (u16)JumpOffset;
 			}
 		}
