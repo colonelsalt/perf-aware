@@ -288,23 +288,184 @@ void ImmToRegOp(immediate Immediate, register_access DestReg, reg_contents* RegC
 	}
 }
 
-u16 GetEffectiveAddress(effective_address_expression Address, reg_contents* RegContents)
+u16 GetEffectiveAddress(effective_address_expression Address, reg_contents* RegContents, u32* OutClocks)
 {
-	u16 Result = Address.Displacement;
+	s32 Disp = Address.Displacement;
+	register_index BaseReg = Register_none;
+	register_index IndexReg = Register_none;
+
+	u16 Result = Disp;
 	for (int i = 0; i < 2; i++)
 	{
 		register_access EffReg = Address.Terms[i].Register;
 		if (EffReg.Index != Register_none)
 		{
 			Result += RegContents[EffReg.Index].Extended;
+
+			if (EffReg.Index == Register_b || EffReg.Index == Register_bp)
+			{
+				BaseReg = EffReg.Index;
+			}
+			else if (EffReg.Index == Register_si || EffReg.Index == Register_di)
+			{
+				IndexReg = EffReg.Index;
+			}
 		}
 	}
+
+	if (Disp && BaseReg && IndexReg)
+	{
+		if (BaseReg == Register_bp)
+		{
+			if (IndexReg == Register_di)
+			{
+				*OutClocks += 11;
+			}
+			else // IndexReg is si
+			{
+				*OutClocks += 12;
+			}
+		}
+		else // BaseReg is bx
+		{
+			if (IndexReg == Register_si)
+			{
+				*OutClocks += 11;
+			}
+			else // IndexReg is di
+			{
+				*OutClocks += 12;
+			}
+		}
+	}
+	else if (BaseReg && IndexReg)
+	{
+		if (BaseReg == Register_bp)
+		{
+			if (IndexReg == Register_di)
+			{
+				*OutClocks += 7;
+			}
+			else // IndexReg is si
+			{
+				*OutClocks += 8;
+			}
+		}
+		else // BaseReg is bx
+		{
+			if (IndexReg == Register_si)
+			{
+				*OutClocks += 7;
+			}
+			else // IndexReg is di
+			{
+				*OutClocks += 8;
+			}
+		}
+	}
+	else if (Disp && (BaseReg || IndexReg))
+	{
+		*OutClocks += 9;
+	}
+	else if (BaseReg || IndexReg)
+	{
+		*OutClocks += 5;
+	}
+	else if (Disp)
+	{
+		*OutClocks += 6;
+	}
+	else
+	{
+		Assert(false);
+	}
+
 	return Result;
 }
 
-u32 Simulate(instruction Instruction, reg_contents* RegContents, u8* Memory)
+u32 GetClockCycles(instruction Instruction)
+{
+	instruction_operand Op0 = Instruction.Operands[0];
+	instruction_operand Op1 = Instruction.Operands[1];
+
+	switch (Instruction.Op)
+	{
+		case Op_add:
+		{
+			if (Op0.Type == Operand_Register && Op1.Type == Operand_Register)
+			{
+				return 3;
+			}
+			else if (Op0.Type == Operand_Register && Op1.Type == Operand_Memory)
+			{
+				return 9;
+			}
+			else if (Op0.Type == Operand_Memory && Op1.Type == Operand_Register)
+			{
+				return 16;
+			}
+			else if (Op0.Type == Operand_Register && Op1.Type == Operand_Immediate)
+			{
+				return 4;
+			}
+			else if (Op0.Type == Operand_Memory && Op1.Type == Operand_Immediate)
+			{
+				return 17;
+			}
+		} break;
+		case Op_mov:
+		{
+			if (Op0.Type == Operand_Memory && Op1.Type == Operand_Register)
+			{
+				if (Op1.Register.Index == Register_a)
+				{
+					return 10;
+				}
+				else
+				{
+					return 9;
+				}
+			}
+			else if (Op0.Type == Operand_Register && Op1.Type == Operand_Memory)
+			{
+				if (Op0.Register.Index == Register_a)
+				{
+					return 10;
+				}
+				else
+				{
+					return 8;
+				}
+			}
+			else if (Op0.Type == Operand_Register && Op1.Type == Operand_Register)
+			{
+				return 2;
+			}
+			else if (Op0.Type == Operand_Register && Op1.Type == Operand_Immediate)
+			{
+				return 4;
+			}
+			else if (Op0.Type == Operand_Memory && Op1.Type == Operand_Immediate)
+			{
+				return 10;
+			}
+		} break;
+	}
+
+	// TODO: This obvs does not count sub/cmps
+	return 0;
+}
+
+struct sim_result
+{
+	u32 Ip;
+	u32 ClockCycles;
+};
+
+sim_result Simulate(instruction Instruction, reg_contents* RegContents, u8* Memory)
 {
 	RegContents[Register_ip].Extended += Instruction.Size;
+	u32 ClockCycles = 0;
 
 	if (Instruction.Operands[0].Type == Operand_Memory || Instruction.Operands[1].Type == Operand_Memory)
 	{
@@ -312,7 +473,7 @@ u32 Simulate(instruction Instruction, reg_contents* RegContents, u8* Memory)
 		if (Instruction.Operands[0].Type == Operand_Memory)
 		{
 			// Storing to memory
-			u16 MemoryAddr = GetEffectiveAddress(Instruction.Operands[0].Address, RegContents);
+			u16 MemoryAddr = GetEffectiveAddress(Instruction.Operands[0].Address, RegContents, &ClockCycles);
 			u8* MemoryLoc = Memory + MemoryAddr;
 
 			if (Instruction.Operands[1].Type == Operand_Immediate)
@@ -364,7 +525,7 @@ u32 Simulate(instruction Instruction, reg_contents* RegContents, u8* Memory)
 
 			register_access DestReg = Instruction.Operands[0].Register;
 
-			u16 MemoryAddr = GetEffectiveAddress(Instruction.Operands[1].Address, RegContents);
+			u16 MemoryAddr = GetEffectiveAddress(Instruction.Operands[1].Address, RegContents, &ClockCycles);
 			u8* MemoryLoc = Memory + MemoryAddr;
 
 			if (Instruction.Flags & Inst_Wide)
@@ -440,7 +601,8 @@ u32 Simulate(instruction Instruction, reg_contents* RegContents, u8* Memory)
 		}
 	}
 
-	return RegContents[Register_ip].Extended;
+	ClockCycles += GetClockCycles(Instruction);
+	return { RegContents[Register_ip].Extended, ClockCycles };
 }
 
 struct list_node
@@ -467,6 +629,7 @@ int main(int ArgCount, char** ArgV)
 	char* FileName;
 	b32 ShouldExecute = false;
 	b32 ShouldDump = false;
+	b32 ShouldPrintClocks = false;
 	for (int i = 1; i < ArgCount; i++)
 	{
 		if (strcmp(ArgV[i], "-exec") == 0)
@@ -476,6 +639,10 @@ int main(int ArgCount, char** ArgV)
 		else if (strcmp(ArgV[i], "-dump") == 0)
 		{
 			ShouldDump = true;
+		}
+		else if (strcmp(ArgV[i], "-clocks") == 0)
+		{
+			ShouldPrintClocks = true;
 		}
 		else
 		{
@@ -490,6 +657,7 @@ int main(int ArgCount, char** ArgV)
 	LoadFile(FileName, s_Memory, &FileSize);
 
     u32 Offset = 0;
+	u32 TotalClocks = 0;
     while(Offset < FileSize)
     {
         instruction Decoded;
@@ -500,7 +668,14 @@ int main(int ArgCount, char** ArgV)
 			if (ShouldExecute)
 			{
 				printf(" ; ");
-				Offset = Simulate(Decoded, RegisterContents, s_Memory);
+				sim_result SimResult = Simulate(Decoded, RegisterContents, s_Memory);
+				Offset = SimResult.Ip;
+				TotalClocks += SimResult.ClockCycles;
+
+				if (ShouldPrintClocks)
+				{
+					printf("Clocks: +%d = %d | ", SimResult.ClockCycles, TotalClocks);
+				}
 				PrintRegDiff(RegisterContents, OldRegContents);
 			}
 			printf("\n");
@@ -516,7 +691,7 @@ int main(int ArgCount, char** ArgV)
 			memcpy(OldRegContents, RegisterContents, sizeof(RegisterContents));
 		}
     }
-		
+	
 	if (ShouldExecute)
 	{
 		PrintRegContents(RegisterContents);
