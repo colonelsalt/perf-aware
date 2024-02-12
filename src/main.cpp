@@ -81,7 +81,6 @@ void PrintRegContents(reg_contents* Regs)
 	
 	printf("   flags: ");
 	PrintFlags(Regs[Register_flags].Extended);
-
 }
 
 void PrintRegDiff(reg_contents* RegsCurrent, reg_contents* RegsOld)
@@ -298,22 +297,47 @@ u32 Simulate(instruction Instruction, reg_contents* RegContents, u8* Memory)
 		{
 			// Storing to memory
 			u16 MemoryAddr = GetEffectiveAddress(Instruction.Operands[0].Address, RegContents);
-			u16* MemoryLoc = (u16*)(Memory + MemoryAddr);
+			u8* MemoryLoc = Memory + MemoryAddr;
 
 			if (Instruction.Operands[1].Type == Operand_Immediate)
 			{
 				// Immediate to memory
-				u16 Immval = (u16)Instruction.Operands[1].Immediate.Value;
-				Perform16BitOp(MemoryLoc, Immval, Flags, Instruction.Op);
+				if (Instruction.Flags & Inst_Wide)
+				{
+					u16 Immval = (u16)Instruction.Operands[1].Immediate.Value;
+					Perform16BitOp((u16*)MemoryLoc, Immval, Flags, Instruction.Op);
+				}
+				else
+				{
+					u8 Immval = (u8)Instruction.Operands[1].Immediate.Value;
+					Perform8BitOp(MemoryLoc, Immval, Flags, Instruction.Op);
+				}
 			}
 			else
 			{
 				// Register to memory
 				Assert(Instruction.Operands[1].Type == Operand_Register);
 				register_access SourceReg = Instruction.Operands[1].Register;
-				u16 RegVal = RegContents[SourceReg.Index].Extended;
 
-				Perform16BitOp(MemoryLoc, RegVal, Flags, Instruction.Op);
+				if (SourceReg.Count == 2)
+				{
+					u16 RegVal = RegContents[SourceReg.Index].Extended;
+					Perform16BitOp((u16*)MemoryLoc, RegVal, Flags, Instruction.Op);
+				}
+				else
+				{
+					Assert(SourceReg.Offset <= 1);
+					u8 RegVal;
+					if (SourceReg.Offset == 0)
+					{
+						RegVal = RegContents[SourceReg.Index].Low;
+					}
+					else
+					{
+						RegVal = RegContents[SourceReg.Index].High;
+					}
+					Perform8BitOp(MemoryLoc, RegVal, Flags, Instruction.Op);
+				}
 			}
 		}
 		else
@@ -322,12 +346,30 @@ u32 Simulate(instruction Instruction, reg_contents* RegContents, u8* Memory)
 			Assert(Instruction.Operands[0].Type == Operand_Register);
 			Assert(Instruction.Operands[1].Type == Operand_Memory);
 
-			register_access DestRegister = Instruction.Operands[0].Register;
+			register_access DestReg = Instruction.Operands[0].Register;
 
 			u16 MemoryAddr = GetEffectiveAddress(Instruction.Operands[1].Address, RegContents);
-			u16* MemoryLoc = (u16*)(Memory + MemoryAddr);
+			u8* MemoryLoc = Memory + MemoryAddr;
 
-			Perform16BitOp(&RegContents[DestRegister.Index].Extended, *MemoryLoc, Flags, Instruction.Op);
+			if (Instruction.Flags & Inst_Wide)
+			{
+				Assert(DestReg.Count == 2);
+				Perform16BitOp(&RegContents[DestReg.Index].Extended, *((u16*)MemoryLoc), Flags, Instruction.Op);
+			}
+			else
+			{
+				Assert(DestReg.Offset <= 1);
+				u8* DestVal;
+				if (DestReg.Offset == 0)
+				{
+					DestVal = &RegContents[DestReg.Index].Low;
+				}
+				else
+				{
+					DestVal = &RegContents[DestReg.Index].High;
+				}
+				Perform8BitOp(DestVal, *MemoryLoc, Flags, Instruction.Op);
+			}
 		}
 	}
 	
