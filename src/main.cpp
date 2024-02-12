@@ -33,7 +33,23 @@ void LoadFile(char* FileName, u8* Buffer, u32* OutFileSize)
 		printf("ERROR: Couldn't open file %s\n", FileName);
 		Assert(false);
 	}
+}
 
+void DumpMemory(u8* Memory, u32 MemorySize, char* FileName)
+{
+	FILE* File = fopen(FileName, "wb");
+	if (File)
+	{
+		size_t BytesWritten = fwrite(Memory, sizeof(u8), MemorySize, File);
+		Assert(BytesWritten == MemorySize);
+	}
+	else
+	{
+		printf("Failed to create memory dump file: %s\n", FileName);
+		Assert(false);
+	}
+	fclose(File);
+	printf("\nWrote memory dump to %s\n", FileName);
 }
 
 enum reg_flags
@@ -433,7 +449,7 @@ int main(int ArgCount, char** ArgV)
         return -1;
     }
 
-	if (ArgCount > 3)
+	if (ArgCount > 4)
 	{
 		printf("Usage, homie\n");
 		return 1;
@@ -441,11 +457,16 @@ int main(int ArgCount, char** ArgV)
 
 	char* FileName;
 	b32 ShouldExecute = false;
+	b32 ShouldDump = false;
 	for (int i = 1; i < ArgCount; i++)
 	{
 		if (strcmp(ArgV[i], "-exec") == 0)
 		{
 			ShouldExecute = true;
+		}
+		else if (strcmp(ArgV[i], "-dump") == 0)
+		{
+			ShouldDump = true;
 		}
 		else
 		{
@@ -491,6 +512,11 @@ int main(int ArgCount, char** ArgV)
 	{
 		PrintRegContents(RegisterContents);
 	}
+	if (ShouldDump)
+	{
+		DumpMemory(s_Memory, MEMORY_SIZE, "memory_dump.data");
+	}
+
 
     return 0;
 }
