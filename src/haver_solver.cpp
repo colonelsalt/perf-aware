@@ -157,35 +157,74 @@ cool_string JsonFileToString(char* FileName)
 	return Result;
 }
 
+struct perf_categories
+{
+	f64 Startup;
+	f64 Read;
+	f64 MiscSetup;
+	f64 Parse;
+	f64 Sum;
+	f64 MiscOutput;
+};
+
+f64 Percentage(f64 Time, f64 TotalTime)
+{
+	f64 Result = (Time / TotalTime) * 100.0;
+	return Result;
+}
+
 int main(int ArgC, char** ArgV)
 {
+	u64 ExecutionStart = __rdtsc();
+	u64 CpuFreq = EstimateCpuFreq(10);
+
+	perf_categories PerfCats = {};
+
 	if (ArgC > 3)
 	{
 		printf("Usage, homie. Expecting input JSON file path, and optionally a reference binary answer file.\n");
 		return 1;
 	}
 
+	PerfCats.Startup = EstimateMs(ExecutionStart, __rdtsc(), CpuFreq);
 
 	f64* Answers = nullptr;
 	if (ArgC == 3)
 	{
 		char* AnswerFileName = ArgV[2];
 		s64 NumAnswers = -1;
+
+		u64 BinaryReadStart = __rdtsc();
+
 		Answers = LoadBinaryAnswers(AnswerFileName, &NumAnswers);
+
+		u64 BinaryReadEnd = __rdtsc();
+		PerfCats.Read += EstimateMs(BinaryReadStart, BinaryReadEnd, CpuFreq);
 	}
 
 	char* JsonFileName = ArgV[1];
+	u64 JsonReadStart = __rdtsc();
 	cool_string Json = JsonFileToString(JsonFileName);
+	u64 JsonReadEnd = __rdtsc();
+	PerfCats.Read += EstimateMs(JsonReadStart, JsonReadEnd, CpuFreq);
+
+	u64 JsonParse1Start = __rdtsc();
 
 	s64 OpenArrayIndex = IndexOfChar(Json, '[');
 	cool_string CurrString = Substring(Json, OpenArrayIndex);
 	
 	s64 PairStartIndex = IndexOfChar(CurrString, '{');
+
+	u64 JsonParse1End = __rdtsc();
+	PerfCats.Parse += EstimateMs(JsonParse1Start, JsonParse1End, CpuFreq);
+
 	f64 Sum = 0.0;
 	s64 NumPairs = 0;
 	f64 ErrorSum = 0.0;
 	while (PairStartIndex != -1)
 	{
+		u64 JsonParse2Start = __rdtsc();
+
 		CurrString = Substring(CurrString, PairStartIndex);
 
 		CurrString = Substring(CurrString, IndexOfCString(CurrString, "x0"));
@@ -214,20 +253,36 @@ int main(int ArgC, char** ArgV)
 		CoolToC(Y1String, StrBuff);
 		f64 Y1 = atof(StrBuff);
 
+		u64 JsonParse2End = __rdtsc();
+		PerfCats.Parse += EstimateMs(JsonParse2Start, JsonParse2End, CpuFreq);
+
+		u64 SumStart = __rdtsc();
 		f64 Haversine = ReferenceHaversine(X0, Y0, X1, Y1);
 
-		f64 RealAnswer = Answers[NumPairs];
-		ErrorSum += abs(Haversine - RealAnswer);
+		if (Answers)
+		{
+			f64 RealAnswer = Answers[NumPairs];
+			ErrorSum += abs(Haversine - RealAnswer);
+		}
 
 		Sum += Haversine;
+		u64 SumEnd = __rdtsc();
+		PerfCats.Sum += EstimateMs(SumStart, SumEnd, CpuFreq);
 
 		NumPairs++;
+
+		u64 JsonParse3Start = __rdtsc();
 		PairStartIndex = IndexOfChar(CurrString, '{');
+		u64 JsonParse3End = __rdtsc();
+		PerfCats.Parse += EstimateMs(JsonParse3Start, JsonParse3End, CpuFreq);
 	}
+
+	u64 OutputStart = __rdtsc();
 	f64 Mean = Sum / NumPairs;
 
-	printf("Number of pais: %lld\n", NumPairs);
+	printf("Number of pairs: %lld\n", NumPairs);
 	printf("Average Haversine distance: %f\n", Mean);
+
 
 	if (Answers)
 	{
@@ -236,4 +291,19 @@ int main(int ArgC, char** ArgV)
 		printf("Difference: %f\n", abs(Mean - Answers[NumPairs]));
 		printf("Average per-pair difference: %f\n", ErrorSum / NumPairs);
 	}
+
+	u64 OutputEnd = __rdtsc();
+	PerfCats.MiscOutput = EstimateMs(OutputStart, OutputEnd, CpuFreq);
+
+	u64 ExecutionEnd = __rdtsc();
+
+	f64 TotalTimeMs = (ExecutionEnd - ExecutionStart) / ((f64)CpuFreq) * 1'000;
+
+	printf("\nPerformance metrics:\n");
+	printf("Total time: %fms (CPU freq %llu)\n", TotalTimeMs, CpuFreq);
+	printf(" Startup: %.0f (%.2f%%)\n", PerfCats.Startup, Percentage(PerfCats.Startup, TotalTimeMs));
+	printf(" Read: %.0f (%.2f%%)\n", PerfCats.Read, Percentage(PerfCats.Read, TotalTimeMs));
+	printf(" Parse: %.0f (%.2f%%)\n", PerfCats.Parse, Percentage(PerfCats.Parse, TotalTimeMs));
+	printf(" Sum: %.0f (%.2f%%)\n", PerfCats.Sum, Percentage(PerfCats.Sum, TotalTimeMs));
+	printf(" MiscOutput: %.0f (%.2f%%)\n", PerfCats.MiscOutput, Percentage(PerfCats.MiscOutput, TotalTimeMs));
 }

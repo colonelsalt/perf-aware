@@ -49,3 +49,55 @@ static f64 ReferenceHaversine(f64 X0, f64 Y0, f64 X1, f64 Y1)
     
     return Result;
 }
+
+#include <intrin.h>
+#include <windows.h>
+
+static u64 GetOSTimerFreq(void)
+{
+	LARGE_INTEGER Freq;
+	QueryPerformanceFrequency(&Freq);
+	return Freq.QuadPart;
+}
+
+static u64 ReadOSTimer(void)
+{
+	LARGE_INTEGER Value;
+	QueryPerformanceCounter(&Value);
+	return Value.QuadPart;
+}
+
+static u64 EstimateCpuFreq(u64 MsToWait)
+{
+	u64 OsFreq = GetOSTimerFreq();
+
+	u64 CpuStart = __rdtsc();
+	u64 OsStart = ReadOSTimer();
+
+	u64 OsEnd = 0;
+	u64 OsElapsed = 0;
+	u64 OsWaitTime = OsFreq * MsToWait / 1'000;
+	while (OsElapsed < OsWaitTime)
+	{
+		OsEnd = ReadOSTimer();
+		OsElapsed = OsEnd - OsStart;
+	}
+
+	u64 CpuEnd = __rdtsc();
+	u64 CpuElapsed = CpuEnd - CpuStart;
+	u64 CpuFreq = 0;
+	if (OsElapsed)
+	{
+		CpuFreq = OsFreq * CpuElapsed / OsElapsed;
+	}
+
+	return CpuFreq;
+}
+
+static f64 EstimateMs(u64 CpuStart, u64 CpuEnd, u64 CpuFreq)
+{
+	f64 CpuElapsed = CpuEnd - CpuStart;
+	f64 Secs = CpuElapsed / CpuFreq;
+	f64 Result = Secs * 1'000;
+	return Result;
+}
