@@ -94,10 +94,21 @@ static u64 EstimateCpuFreq(u64 MsToWait)
 	return CpuFreq;
 }
 
+static f64 EstimateMs(u64 CpuElapsed, u64 CpuFreq)
+{
+	f64 Secs = ((f64)CpuElapsed) / CpuFreq;
+	f64 Result = Secs * 1'000;
+	return Result;
+}
+
 static f64 EstimateMs(u64 CpuStart, u64 CpuEnd, u64 CpuFreq)
 {
 	f64 CpuElapsed = CpuEnd - CpuStart;
-	f64 Secs = CpuElapsed / CpuFreq;
-	f64 Result = Secs * 1'000;
+	return EstimateMs(CpuElapsed, CpuFreq);
+}
+
+f64 Percentage(f64 Time, f64 TotalTime)
+{
+	f64 Result = (Time / TotalTime) * 100.0;
 	return Result;
 }
