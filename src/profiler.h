@@ -4,8 +4,8 @@
 
 struct profile_anchor
 {
-	u64 TscElapsed;
-	u64 TscElapsedChildren;
+	u64 TscElapsedInclusive;
+	u64 TscElapsedExclusive;
 	u32 NumHits;
 	const char* Label;
 };
@@ -25,6 +25,7 @@ static u32 g_ParentAnchorIndex;
 struct profile_block
 {
 	u64 Start;
+	u64 OldTscInclusive;
 	u32 AnchorIndex;
 	u32 ParentIndex;
 	const char* Label;
@@ -37,6 +38,9 @@ struct profile_block
 		ParentIndex = g_ParentAnchorIndex;
 		g_ParentAnchorIndex = AnchorIndex;
 
+		profile_anchor* Anchor = g_Profiler.Anchors + AnchorIndex;
+		OldTscInclusive = Anchor->TscElapsedInclusive;
+
 		Start = __rdtsc();
 	}
 
@@ -46,15 +50,19 @@ struct profile_block
 		u64 Elapsed = End - Start;
 
 		profile_anchor* Anchor = g_Profiler.Anchors + AnchorIndex;
-		Anchor->TscElapsed += Elapsed;
+
+		Anchor->TscElapsedExclusive += Elapsed;
 		Anchor->NumHits++;
 		Anchor->Label = Label;
 
 		if (ParentIndex)
 		{
 			profile_anchor* Parent = g_Profiler.Anchors + ParentIndex;
-			Parent->TscElapsedChildren += Elapsed;
+			Parent->TscElapsedExclusive -= Elapsed;
 		}
+
+		Anchor->TscElapsedInclusive = OldTscInclusive + Elapsed;
+
 		g_ParentAnchorIndex = ParentIndex;
 	}
 };
@@ -83,13 +91,12 @@ void EndAndPrintProfile()
 		profile_anchor* Anchor = g_Profiler.Anchors + i;
 		if (Anchor->NumHits)
 		{
-			u64 Elapsed = Anchor->TscElapsed - Anchor->TscElapsedChildren;
-			f64 Pst = Percentage(Elapsed, TotalTsc);
+			f64 Pst = Percentage(Anchor->TscElapsedExclusive, TotalTsc);
 
-			printf(" %s[%u]: %llu (%.2f%%", Anchor->Label, Anchor->NumHits, Elapsed, Pst);
-			if (Anchor->TscElapsedChildren)
+			printf(" %s[%u]: %llu (%.2f%%", Anchor->Label, Anchor->NumHits, Anchor->TscElapsedExclusive, Pst);
+			if (Anchor->TscElapsedInclusive != Anchor->TscElapsedExclusive)
 			{
-				f64 PstWithChildren = Percentage(Anchor->TscElapsed, TotalTsc);
+				f64 PstWithChildren = Percentage(Anchor->TscElapsedInclusive, TotalTsc);
 				printf(", %.2f%% w/children", PstWithChildren);
 			}
 			printf(")\n");
