@@ -2,22 +2,34 @@
 
 
 
-struct profile_measurement
+struct profile_anchor
 {
-	u64 Elapsed;
-	char FunctionName[128];
+	u64 TscElapsed;
+	u32 NumHits;
+	const char* Label;
 };
-profile_measurement g_Profiles[16];
-u32 g_Counter = 0;
+
+struct profiler
+{
+	profile_anchor Anchors[256];
+
+	// Global start and end times
+	u64 StartTsc;
+	u64 EndTsc;
+};
+static profiler g_Profiler;
+
 
 struct profile_block
 {
 	u64 Start;
-	const char* FunctionName;
+	u32 AnchorIndex;
+	const char* Label;
 
-	profile_block(const char* FuncName)
+	profile_block(const char* BlockLabel, u32 AnchIndex)
 	{
-		FunctionName = FuncName;
+		Label = BlockLabel;
+		AnchorIndex = AnchIndex;
 		Start = __rdtsc();
 	}
 
@@ -25,38 +37,40 @@ struct profile_block
 	{
 		u64 End = __rdtsc();
 		
-		profile_measurement* Pm = g_Profiles + g_Counter++;
-		Pm->Elapsed = End - Start;
-		strcpy(Pm->FunctionName, FunctionName);
+		profile_anchor* Anchor = g_Profiler.Anchors + AnchorIndex;
+		Anchor->TscElapsed += End - Start;
+		Anchor->NumHits++;
+		Anchor->Label = Label;
 	}
 };
 
-#define TimeFunction profile_block __BLOCK(__func__)
-
-static u64 s_ProfileStart;
+#define TimeBlock(Name) profile_block __BLOCK(Name, __COUNTER__ + 1)
+#define TimeFunction TimeBlock(__func__)
 
 void BeginProfile()
 {
-	s_ProfileStart = __rdtsc();
+	g_Profiler.StartTsc = __rdtsc();
 }
 
 void EndAndPrintProfile()
 {
-	u64 ProfileEnd = __rdtsc();
+	g_Profiler.EndTsc = __rdtsc();
 	u64 CpuFreq = EstimateCpuFreq(10);
 
-	f64 TotalTimeMs = EstimateMs(s_ProfileStart, ProfileEnd, CpuFreq);
+	f64 TotalTimeMs = EstimateMs(g_Profiler.StartTsc, g_Profiler.EndTsc, CpuFreq);
 
 	printf("\nPerformance metrics:\n");
 	printf("Total time: %fms (CPU freq %llu)\n", TotalTimeMs, CpuFreq);
 
-	for (u32 i = 0; i < g_Counter; i++)
+	for (u32 i = 0; i < ArrayCount(g_Profiler.Anchors); i++)
 	{
-		profile_measurement* Profile = g_Profiles + i;
+		profile_anchor* Anchor = g_Profiler.Anchors + i;
+		if (Anchor->NumHits != 0)
+		{
+			f64 TimeMs = EstimateMs(Anchor->TscElapsed, CpuFreq);
+			f64 Pst = Percentage(TimeMs, TotalTimeMs);
 
-		f64 TimeMs = EstimateMs(Profile->Elapsed, CpuFreq);
-		f64 Pst = Percentage(TimeMs, TotalTimeMs);
-
-		printf(" %s: %llu (%.2f%%)\n", Profile->FunctionName, Profile->Elapsed, Pst);
+			printf(" %s[%u]: %llu (%.2f%%)\n", Anchor->Label, Anchor->NumHits, Anchor->TscElapsed, Pst);
+		}
 	}
 }
