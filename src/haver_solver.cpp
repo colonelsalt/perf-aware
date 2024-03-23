@@ -58,6 +58,8 @@ void CoolToC(cool_string String, char* OutBuffer)
 // Inclusive on both ends
 cool_string Substring(cool_string String, s64 StartIndex, s64 EndIndex = -1)
 {
+	TimeFunction;
+
 	Assert(StartIndex >= 0 && StartIndex < String.Length);
 
 	cool_string Result = {};

@@ -5,6 +5,7 @@
 struct profile_anchor
 {
 	u64 TscElapsed;
+	u64 TscElapsedChildren;
 	u32 NumHits;
 	const char* Label;
 };
@@ -18,29 +19,43 @@ struct profiler
 	u64 EndTsc;
 };
 static profiler g_Profiler;
+static u32 g_ParentAnchorIndex;
 
 
 struct profile_block
 {
 	u64 Start;
 	u32 AnchorIndex;
+	u32 ParentIndex;
 	const char* Label;
 
 	profile_block(const char* BlockLabel, u32 AnchIndex)
 	{
 		Label = BlockLabel;
 		AnchorIndex = AnchIndex;
+
+		ParentIndex = g_ParentAnchorIndex;
+		g_ParentAnchorIndex = AnchorIndex;
+
 		Start = __rdtsc();
 	}
 
 	~profile_block()
 	{
 		u64 End = __rdtsc();
-		
+		u64 Elapsed = End - Start;
+
 		profile_anchor* Anchor = g_Profiler.Anchors + AnchorIndex;
-		Anchor->TscElapsed += End - Start;
+		Anchor->TscElapsed += Elapsed;
 		Anchor->NumHits++;
 		Anchor->Label = Label;
+
+		if (ParentIndex)
+		{
+			profile_anchor* Parent = g_Profiler.Anchors + ParentIndex;
+			Parent->TscElapsedChildren += Elapsed;
+		}
+		g_ParentAnchorIndex = ParentIndex;
 	}
 };
 
@@ -55,6 +70,7 @@ void BeginProfile()
 void EndAndPrintProfile()
 {
 	g_Profiler.EndTsc = __rdtsc();
+	u64 TotalTsc = g_Profiler.EndTsc - g_Profiler.StartTsc;
 	u64 CpuFreq = EstimateCpuFreq(10);
 
 	f64 TotalTimeMs = EstimateMs(g_Profiler.StartTsc, g_Profiler.EndTsc, CpuFreq);
@@ -65,12 +81,18 @@ void EndAndPrintProfile()
 	for (u32 i = 0; i < ArrayCount(g_Profiler.Anchors); i++)
 	{
 		profile_anchor* Anchor = g_Profiler.Anchors + i;
-		if (Anchor->NumHits != 0)
+		if (Anchor->NumHits)
 		{
-			f64 TimeMs = EstimateMs(Anchor->TscElapsed, CpuFreq);
-			f64 Pst = Percentage(TimeMs, TotalTimeMs);
+			u64 Elapsed = Anchor->TscElapsed - Anchor->TscElapsedChildren;
+			f64 Pst = Percentage(Elapsed, TotalTsc);
 
-			printf(" %s[%u]: %llu (%.2f%%)\n", Anchor->Label, Anchor->NumHits, Anchor->TscElapsed, Pst);
+			printf(" %s[%u]: %llu (%.2f%%", Anchor->Label, Anchor->NumHits, Elapsed, Pst);
+			if (Anchor->TscElapsedChildren)
+			{
+				f64 PstWithChildren = Percentage(Anchor->TscElapsed, TotalTsc);
+				printf(", %.2f%% w/children", PstWithChildren);
+			}
+			printf(")\n");
 		}
 	}
 }

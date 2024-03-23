@@ -112,3 +112,9 @@ f64 Percentage(f64 Time, f64 TotalTime)
 	f64 Result = (Time / TotalTime) * 100.0;
 	return Result;
 }
+
+f64 Percentage(u64 Amount, u64 Total)
+{
+	f64 Result = (((f64)Amount) / ((f64)Total)) * 100.0;
+	return Result;
+}
