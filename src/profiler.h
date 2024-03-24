@@ -1,6 +1,10 @@
 #pragma once
 
+#ifndef PROFILER
+#define PROFILER 0
+#endif
 
+#if PROFILER
 
 struct profile_anchor
 {
@@ -10,15 +14,7 @@ struct profile_anchor
 	const char* Label;
 };
 
-struct profiler
-{
-	profile_anchor Anchors[256];
-
-	// Global start and end times
-	u64 StartTsc;
-	u64 EndTsc;
-};
-static profiler g_Profiler;
+static profile_anchor g_ProfilerAnchors[256];
 static u32 g_ParentAnchorIndex;
 
 
@@ -38,7 +34,7 @@ struct profile_block
 		ParentIndex = g_ParentAnchorIndex;
 		g_ParentAnchorIndex = AnchorIndex;
 
-		profile_anchor* Anchor = g_Profiler.Anchors + AnchorIndex;
+		profile_anchor* Anchor = g_ProfilerAnchors + AnchorIndex;
 		OldTscInclusive = Anchor->TscElapsedInclusive;
 
 		Start = __rdtsc();
@@ -49,7 +45,7 @@ struct profile_block
 		u64 End = __rdtsc();
 		u64 Elapsed = End - Start;
 
-		profile_anchor* Anchor = g_Profiler.Anchors + AnchorIndex;
+		profile_anchor* Anchor = g_ProfilerAnchors + AnchorIndex;
 
 		Anchor->TscElapsedExclusive += Elapsed;
 		Anchor->NumHits++;
@@ -57,7 +53,7 @@ struct profile_block
 
 		if (ParentIndex)
 		{
-			profile_anchor* Parent = g_Profiler.Anchors + ParentIndex;
+			profile_anchor* Parent = g_ProfilerAnchors + ParentIndex;
 			Parent->TscElapsedExclusive -= Elapsed;
 		}
 
@@ -68,7 +64,43 @@ struct profile_block
 };
 
 #define TimeBlock(Name) profile_block __BLOCK(Name, __COUNTER__ + 1)
+
+void PrintAnchorData(u64 TotalElapsedTsc)
+{
+	for (u32 i = 0; i < ArrayCount(g_ProfilerAnchors); i++)
+	{
+		profile_anchor* Anchor = g_ProfilerAnchors + i;
+		if (Anchor->NumHits)
+		{
+			f64 Pst = Percentage(Anchor->TscElapsedExclusive, TotalElapsedTsc);
+
+			printf(" %s[%u]: %llu (%.2f%%", Anchor->Label, Anchor->NumHits, Anchor->TscElapsedExclusive, Pst);
+			if (Anchor->TscElapsedInclusive != Anchor->TscElapsedExclusive)
+			{
+				f64 PstWithChildren = Percentage(Anchor->TscElapsedInclusive, TotalElapsedTsc);
+				printf(", %.2f%% w/children", PstWithChildren);
+			}
+			printf(")\n");
+		}
+	}
+}
+
+#else
+
+#define TimeBlock(...)
+#define PrintAnchorData(...)
+
+#endif
+
 #define TimeFunction TimeBlock(__func__)
+
+struct profiler
+{
+	// Global start and end times
+	u64 StartTsc;
+	u64 EndTsc;
+};
+static profiler g_Profiler;
 
 void BeginProfile()
 {
@@ -86,20 +118,5 @@ void EndAndPrintProfile()
 	printf("\nPerformance metrics:\n");
 	printf("Total time: %fms (CPU freq %llu)\n", TotalTimeMs, CpuFreq);
 
-	for (u32 i = 0; i < ArrayCount(g_Profiler.Anchors); i++)
-	{
-		profile_anchor* Anchor = g_Profiler.Anchors + i;
-		if (Anchor->NumHits)
-		{
-			f64 Pst = Percentage(Anchor->TscElapsedExclusive, TotalTsc);
-
-			printf(" %s[%u]: %llu (%.2f%%", Anchor->Label, Anchor->NumHits, Anchor->TscElapsedExclusive, Pst);
-			if (Anchor->TscElapsedInclusive != Anchor->TscElapsedExclusive)
-			{
-				f64 PstWithChildren = Percentage(Anchor->TscElapsedInclusive, TotalTsc);
-				printf(", %.2f%% w/children", PstWithChildren);
-			}
-			printf(")\n");
-		}
-	}
+	PrintAnchorData(TotalTsc);
 }
