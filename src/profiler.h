@@ -11,6 +11,7 @@ struct profile_anchor
 	u64 TscElapsedInclusive;
 	u64 TscElapsedExclusive;
 	u32 NumHits;
+	u64 NumProcessedBytes;
 	const char* Label;
 };
 
@@ -26,7 +27,7 @@ struct profile_block
 	u32 ParentIndex;
 	const char* Label;
 
-	profile_block(const char* BlockLabel, u32 AnchIndex)
+	profile_block(const char* BlockLabel, u32 AnchIndex, u64 ByteCount = 0)
 	{
 		Label = BlockLabel;
 		AnchorIndex = AnchIndex;
@@ -35,6 +36,8 @@ struct profile_block
 		g_ParentAnchorIndex = AnchorIndex;
 
 		profile_anchor* Anchor = g_ProfilerAnchors + AnchorIndex;
+		Anchor->NumProcessedBytes += ByteCount;
+
 		OldTscInclusive = Anchor->TscElapsedInclusive;
 
 		Start = __rdtsc();
@@ -63,9 +66,9 @@ struct profile_block
 	}
 };
 
-#define TimeBlock(Name) profile_block __BLOCK(Name, __COUNTER__ + 1)
+#define TimeBandwidth(Name, ByteCount) profile_block BLOCK__(Name, __COUNTER__ + 1, ByteCount)
 
-void PrintAnchorData(u64 TotalElapsedTsc)
+void PrintAnchorData(u64 TotalElapsedTsc, u64 CpuFreq)
 {
 	for (u32 i = 0; i < ArrayCount(g_ProfilerAnchors); i++)
 	{
@@ -80,18 +83,34 @@ void PrintAnchorData(u64 TotalElapsedTsc)
 				f64 PstWithChildren = Percentage(Anchor->TscElapsedInclusive, TotalElapsedTsc);
 				printf(", %.2f%% w/children", PstWithChildren);
 			}
-			printf(")\n");
+			printf(")");
+
+			if (Anchor->NumProcessedBytes)
+			{
+				constexpr f64 MEGABYTE = 1'024 * 1'024;
+				constexpr f64 GIGABYTE = 1'024 * MEGABYTE;
+
+				f64 AnchorTimeSec = (f64)Anchor->TscElapsedInclusive / (f64)CpuFreq;
+
+				f64 NumMb = Anchor->NumProcessedBytes / MEGABYTE;
+				f64 NumGb = Anchor->NumProcessedBytes / GIGABYTE;
+				f64 GbPerSec = NumGb / AnchorTimeSec;
+
+				printf("  %.3fmb at %.2fgb/s", NumMb, GbPerSec);
+			}
+			printf("\n");
 		}
 	}
 }
 
 #else
 
-#define TimeBlock(...)
+#define TimeBandwidth(...)
 #define PrintAnchorData(...)
 
 #endif
 
+#define TimeBlock(Name) TimeBandwidth(Name, 0)
 #define TimeFunction TimeBlock(__func__)
 
 struct profiler
@@ -118,5 +137,5 @@ void EndAndPrintProfile()
 	printf("\nPerformance metrics:\n");
 	printf("Total time: %fms (CPU freq %llu)\n", TotalTimeMs, CpuFreq);
 
-	PrintAnchorData(TotalTsc);
+	PrintAnchorData(TotalTsc, CpuFreq);
 }

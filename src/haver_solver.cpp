@@ -21,9 +21,12 @@ f64* LoadBinaryAnswers(char* FileName, s64* OutNumElements)
 		Result = (f64*)malloc(FileSize);
 		*OutNumElements = FileSize / sizeof(f64);
 
-		size_t ElementsRead = fread(Result, sizeof(f64), *OutNumElements, File);
-		Assert(ElementsRead == *OutNumElements);
-		fclose(File);
+		{
+			TimeBandwidth("ReadBinaryFile", FileSize);
+			size_t ElementsRead = fread(Result, sizeof(f64), *OutNumElements, File);
+			Assert(ElementsRead == *OutNumElements);
+			fclose(File);
+		}
 	}
 	else
 	{
@@ -155,13 +158,15 @@ cool_string JsonFileToString(char* FileName)
 		return {nullptr, -1};
 	}
 
-	// Note: Apparently BytesRead can turn out slightly smaller than Size, but that should be ok..?
-	size_t BytesRead = fread(StringBuffer, sizeof(u8), Size, File);
-	
 	cool_string Result = {};
-	Result.Data = StringBuffer;
-	Result.Length = BytesRead;
-
+	{
+		TimeBandwidth("JsonToString", Size);
+		// Note: Apparently BytesRead can turn out slightly smaller than Size, but that should be ok..?
+		size_t BytesRead = fread(StringBuffer, sizeof(u8), Size, File);
+	
+		Result.Data = StringBuffer;
+		Result.Length = BytesRead;
+	}
 	return Result;
 }
 
@@ -175,7 +180,7 @@ struct haver_pair
 
 haver_pair* ParseHaverPairs(cool_string Json, s64* OutNumPairs)
 {
-	TimeFunction;
+	TimeBandwidth(__func__, Json.Length);
 
 	*OutNumPairs = 0;
 
@@ -228,7 +233,7 @@ haver_pair* ParseHaverPairs(cool_string Json, s64* OutNumPairs)
 
 f64 SumHaverPairs(haver_pair* Pairs, s64 NumPairs)
 {
-	TimeFunction;
+	TimeBandwidth(__func__, NumPairs * sizeof(haver_pair));
 
 	f64 Sum = 0.0;
 	for (s64 i = 0; i < NumPairs; i++)
