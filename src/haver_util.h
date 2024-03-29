@@ -18,6 +18,12 @@ typedef uint64_t u64;
 
 static constexpr f64 EARTH_RADIUS = 6'372.8;
 
+struct buffer
+{
+	u8* Memory;
+	u64 Size;
+};
+
 static f64 Square(f64 A)
 {
     f64 Result = (A*A);
@@ -93,6 +99,19 @@ static u64 EstimateCpuFreq(u64 MsToWait)
 
 	return CpuFreq;
 }
+
+static f64 EstimateSecs(u64 CpuElapsed, u64 CpuFreq)
+{
+	f64 Result = ((f64)CpuElapsed) / CpuFreq;
+	return Result;
+}
+
+static f64 EstimateSecs(u64 CpuStart, u64 CpuEnd, u64 CpuFreq)
+{
+	f64 Result = EstimateSecs(CpuEnd - CpuStart, CpuFreq) * 1'000;
+	return Result;
+}
+
 
 static f64 EstimateMs(u64 CpuElapsed, u64 CpuFreq)
 {

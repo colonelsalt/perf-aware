@@ -22,7 +22,7 @@ f64* LoadBinaryAnswers(char* FileName, s64* OutNumElements)
 		*OutNumElements = FileSize / sizeof(f64);
 
 		{
-			TimeBandwidth("ReadBinaryFile", FileSize);
+			TimeBandwidth("fread binary", FileSize);
 			size_t ElementsRead = fread(Result, sizeof(f64), *OutNumElements, File);
 			Assert(ElementsRead == *OutNumElements);
 			fclose(File);
@@ -160,7 +160,7 @@ cool_string JsonFileToString(char* FileName)
 
 	cool_string Result = {};
 	{
-		TimeBandwidth("JsonToString", Size);
+		TimeBandwidth("fread text", Size);
 		// Note: Apparently BytesRead can turn out slightly smaller than Size, but that should be ok..?
 		size_t BytesRead = fread(StringBuffer, sizeof(u8), Size, File);
 	
