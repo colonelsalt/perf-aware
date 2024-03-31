@@ -45,16 +45,27 @@ int main(int ArgC, char** ArgV)
 		return 1;
 	}
 
-	rep_tester Testers[ArrayCount(TestFunctions)] = {};
+	rep_tester Testers[ArrayCount(TestFunctions)][alloc_type::Count] = {};
 
-	for (u32 i = 0; i < ArrayCount(TestFunctions); i++)
+
+	while (true)
 	{
-		rep_tester* Tester = Testers + i;
-		test_function TestFunc = TestFunctions[i];
+		for (u32 i = 0; i < ArrayCount(TestFunctions); i++)
+		{
+			for (u32 AllocType = alloc_type::None; AllocType < alloc_type::Count; AllocType++)
+			{
+				Params.AllocType = (alloc_type)AllocType;
 
-		printf("\n--- %s ---\n", TestFunc.Name);
-		InitTestWave(Tester, Params.DestBuffer.Size, CpuFreq, 30);
-		TestFunc.Function(Tester, &Params);
+				rep_tester* Tester = &Testers[i][AllocType];
+				test_function TestFunc = TestFunctions[i];
+
+				printf("\n--- %s%s%s ---\n",
+				       TestFunc.Name,
+				       AllocType ? " + " : "",
+				       GetAllocName(Params.AllocType));
+				InitTestWave(Tester, Params.DestBuffer.Size, CpuFreq, 10);
+				TestFunc.Function(Tester, &Params);
+			}
+		}
 	}
-
 }

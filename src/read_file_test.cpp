@@ -4,13 +4,75 @@
 #include <fcntl.h>
 #include <io.h>
 
+enum alloc_type : u32
+{
+	None,
+	Malloc,
+
+	Count
+};
+
 struct read_params
 {
+	alloc_type AllocType;
 	buffer DestBuffer;
 	const char* FileName;
 };
 
 typedef void read_testing_func(rep_tester* Tester, read_params* Params);
+
+static const char* GetAllocName(alloc_type Type)
+{
+	switch (Type)
+	{
+		case alloc_type::None:
+			return "";
+		case alloc_type::Malloc:
+			return "Malloc";
+		default:
+			return "ERROR-TYPE";
+	}
+}
+
+static void Allocate(read_params* Params, buffer* OutBuffer)
+{
+	switch (Params->AllocType)
+	{
+		case alloc_type::None:
+			break;
+		
+		case alloc_type::Malloc:
+		{
+			OutBuffer->Size = Params->DestBuffer.Size;
+			OutBuffer->Memory = (u8*)malloc(Params->DestBuffer.Size);
+		} break;
+
+		default:
+		{
+			fprintf(stderr, "ERROR: Unrecognised allocation type\n");
+		} break;
+	}
+}
+
+static void Deallocate(read_params* Params, buffer* OutBuffer)
+{
+	switch (Params->AllocType)
+	{
+		case alloc_type::None:
+			break;
+
+		case alloc_type::Malloc:
+		{
+			free(OutBuffer->Memory);
+			*OutBuffer = {};
+		} break;
+
+		default:
+		{
+			fprintf(stderr, "ERROR: Unrecognised allocation type\n");
+		} break;
+	}
+}
 
 void FReadTest(rep_tester* Tester, read_params* Params)
 {
@@ -20,6 +82,7 @@ void FReadTest(rep_tester* Tester, read_params* Params)
 		if (File)
 		{
 			buffer DestBuffer = Params->DestBuffer;
+			Allocate(Params, &DestBuffer);
 
 			BeginTest(Tester);
 			size_t Result = fread(DestBuffer.Memory, DestBuffer.Size, 1, File);
@@ -33,6 +96,7 @@ void FReadTest(rep_tester* Tester, read_params* Params)
 				Error(Tester, "fread failed");
 			}
 
+			Deallocate(Params, &DestBuffer);
 			fclose(File);
 		}
 		else
@@ -54,6 +118,8 @@ void ReadTest(rep_tester* Tester, read_params* Params)
 		else
 		{
 			buffer DestBuffer = Params->DestBuffer;
+			Allocate(Params, &DestBuffer);
+
 			u64 BytesRemaining = DestBuffer.Size;
 			u8* Dest = DestBuffer.Memory;
 			while (BytesRemaining)
@@ -82,6 +148,7 @@ void ReadTest(rep_tester* Tester, read_params* Params)
 				Dest += ReadSize;
 			}
 
+			Deallocate(Params, &DestBuffer);
 			_close(File);
 		}
 	}
@@ -99,6 +166,7 @@ void ReadFileTest(rep_tester* Tester, read_params* Params)
 		else
 		{
 			buffer DestBuffer = Params->DestBuffer;
+			Allocate(Params, &DestBuffer);
 
 			u64 BytesRemaining = DestBuffer.Size;
 			u8* Dest = DestBuffer.Memory;
@@ -129,6 +197,7 @@ void ReadFileTest(rep_tester* Tester, read_params* Params)
 				Dest += ReadSize;
 			}
 
+			Deallocate(Params, &DestBuffer);
 			CloseHandle(File);
 		}
 	}
