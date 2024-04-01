@@ -1,13 +1,5 @@
 #pragma once
 
-struct rep_test_results
-{
-	u64 NumTests;
-	u64 TotalTime;
-	u64 MaxTime;
-	u64 MinTime;
-};
-
 enum class test_mode : u32
 {
 	Uninitialised,
@@ -16,37 +8,70 @@ enum class test_mode : u32
 	Error
 };
 
+enum rep_value_type
+{
+	RepValue_NumTests,
+	RepValue_CpuTimer,
+	RepValue_PageFaults,
+	RepValue_NumBytes,
+
+	RepValue_Count
+};
+
+struct rep_values
+{
+	u64 E[RepValue_Count];
+
+	u64& operator[](u64 Index)
+	{
+		Assert(Index >= 0 && Index < RepValue_Count);
+
+		u64& Result = E[Index];
+		return Result;
+	}
+};
+
+struct rep_test_results
+{
+	rep_values Total;
+	rep_values Max;
+	rep_values Min;
+};
+
 struct rep_tester
 {
 	u64 TargetNumBytes;
 	u64 CpuFreq;
-	u64 TestAttemptTime; // How long to keep trying without finding a new min. time before finishing the test
+	u64 TestAttemptTime; // How long to keep trying without finding a new min. time before finishing the test run
 	u64 TestStartTime;
 
 	test_mode Mode;
 	u32 NumOpenBlocks;
 	u32 NumCloseBlocks;
-	u64 ElapsedForCurrentTest; // Resets when new min. time found
-	u64 ByteCount;
 
+	rep_values AccValues; // Accumulated values for all runs of this test instance
 	rep_test_results Results;
 };
 
 static void BeginTest(rep_tester* Tester)
 {
 	Tester->NumOpenBlocks++;
-	Tester->ElapsedForCurrentTest -= __rdtsc();
+
+	Tester->AccValues[RepValue_CpuTimer] -= __rdtsc();
+	Tester->AccValues[RepValue_PageFaults] -= ReadNumOsPageFaults();
 }
 
 static void EndTest(rep_tester* Tester)
 {
 	Tester->NumCloseBlocks++;
-	Tester->ElapsedForCurrentTest += __rdtsc();
+
+	Tester->AccValues[RepValue_CpuTimer] += __rdtsc();
+	Tester->AccValues[RepValue_PageFaults] += ReadNumOsPageFaults();
 }
 
 static void AddBytes(rep_tester* Tester, u64 NumBytes)
 {
-	Tester->ByteCount += NumBytes;
+	Tester->AccValues[RepValue_NumBytes] += NumBytes;
 }
 
 static void Error(rep_tester* Tester, const char* Message)
@@ -62,7 +87,7 @@ static void InitTestWave(rep_tester* Tester, u64 TargetNumBytes, u64 CpuFreq, u3
 		Tester->Mode = test_mode::Testing;
 		Tester->TargetNumBytes = TargetNumBytes;
 		Tester->CpuFreq = CpuFreq;
-		Tester->Results.MinTime = (u64)-1;
+		Tester->Results.Min[RepValue_CpuTimer] = (u64)-1;
 	}
 	else if (Tester->Mode == test_mode::Completed)
 	{
@@ -81,19 +106,43 @@ static void InitTestWave(rep_tester* Tester, u64 TargetNumBytes, u64 CpuFreq, u3
 	Tester->TestStartTime = __rdtsc();
 }
 
-static void PrintTime(const char* Label, u64 TimeTsc, u64 CpuFreq, u64 NumBytes)
+static void PrintRepValues(const char* Label, rep_values Values, u64 CpuFreq)
 {
-	printf("%s: %llu", Label, TimeTsc);
+	// NOTE: Min. and max. values will always have TestCount of 1 - only "total/avg" values will have more
+	f64 Divisor;
+	if (Values[RepValue_NumTests] == 0)
+	{
+		Divisor = 1.0;
+	}
+	else
+	{
+		Divisor = (f64)Values[RepValue_NumTests];
+	}
+
+	f64 FloatValues[RepValue_Count];
+	for (u64 i = 0; i < RepValue_Count; i++)
+	{
+		FloatValues[i] = (f64)Values[i] / Divisor;
+	}
+
+	printf("%s: %.0f", Label, FloatValues[RepValue_CpuTimer]);
+
 	if (CpuFreq)
 	{
-		f64 Secs = EstimateSecs(TimeTsc, CpuFreq);
+		f64 Secs = EstimateSecs(FloatValues[RepValue_CpuTimer], CpuFreq);
 		printf(" (%fms)", Secs * 1'000.0f);
-		if (NumBytes)
+		if (FloatValues[RepValue_NumBytes] > 0.0)
 		{
 			constexpr f64 GIGABYTE = 1'024.0 * 1'024.0 * 1'024.0;
-			f64 Throughput = NumBytes / (GIGABYTE * Secs);
+			f64 Throughput = FloatValues[RepValue_NumBytes] / (GIGABYTE * Secs);
 			printf(" %fgb/s", Throughput);
 		}
+	}
+
+	if (FloatValues[RepValue_PageFaults] > 0.0)
+	{
+		f64 NumPageFaults = FloatValues[RepValue_PageFaults];
+		printf(" PF: %0.4f (%0.4fkb/fault)", NumPageFaults, FloatValues[RepValue_NumBytes] / (NumPageFaults * 1'024.0));
 	}
 }
 
@@ -114,7 +163,7 @@ static b32 IsStillTesting(rep_tester* Tester)
 		{
 			Error(Tester, "Unbalanced BeginTime/EndTime");
 		}
-		if (Tester->ByteCount != Tester->TargetNumBytes)
+		if (Tester->AccValues[RepValue_NumBytes] != Tester->TargetNumBytes)
 		{
 			Error(Tester, "Byte count mismatch");
 		}
@@ -123,27 +172,29 @@ static b32 IsStillTesting(rep_tester* Tester)
 		{
 			rep_test_results* Results = &Tester->Results;
 		
-			Results->NumTests++;
-			Results->TotalTime += Tester->ElapsedForCurrentTest;
-
-			if (Tester->ElapsedForCurrentTest > Results->MaxTime)
+			Tester->AccValues[RepValue_NumTests] = 1;
+			for (u64 i = 0; i < RepValue_Count; i++)
 			{
-				Results->MaxTime = Tester->ElapsedForCurrentTest;
+				Results->Total[i] += Tester->AccValues[i];
 			}
-			if (Tester->ElapsedForCurrentTest < Results->MinTime)
+
+			if (Tester->AccValues[RepValue_CpuTimer] > Results->Max[RepValue_CpuTimer])
 			{
-				Results->MinTime = Tester->ElapsedForCurrentTest;
+				Results->Max = Tester->AccValues;
+			}
+			if (Tester->AccValues[RepValue_CpuTimer] < Results->Min[RepValue_CpuTimer])
+			{
+				Results->Min = Tester->AccValues;
 
 				Tester->TestStartTime = CurrentTime;
-				PrintTime("Min", Results->MinTime, Tester->CpuFreq, Tester->ByteCount);
-				printf("               \r");
+				PrintRepValues("Min", Results->Min, Tester->CpuFreq);
+				printf("                                   \r");
 			}
 
 			// Reset for next test run
 			Tester->NumOpenBlocks = 0;
 			Tester->NumCloseBlocks = 0;
-			Tester->ElapsedForCurrentTest = 0;
-			Tester->ByteCount = 0;
+			Tester->AccValues = {};
 		}
 	}
 
@@ -155,18 +206,14 @@ static b32 IsStillTesting(rep_tester* Tester)
 		rep_test_results* Results = &Tester->Results;
 		printf("                                                          \r");
 		
-		PrintTime("Min", Results->MinTime, Tester->CpuFreq, Tester->TargetNumBytes);
+		PrintRepValues("Min", Results->Min, Tester->CpuFreq);
 		printf("\n");
 
-		PrintTime("Max", Results->MaxTime, Tester->CpuFreq, Tester->TargetNumBytes);
+		PrintRepValues("Max", Results->Max, Tester->CpuFreq);
 		printf("\n");
 
-		if (Results->NumTests)
-		{
-			f64 AvgTime = (f64)Results->TotalTime / (f64)Results->NumTests;
-			PrintTime("Avg", (u64)AvgTime, Tester->CpuFreq, Tester->TargetNumBytes);
-			printf("\n");
-		}
+		PrintRepValues("Avg", Results->Total, Tester->CpuFreq);
+		printf("\n");
 	}
 
 	b32 Result = (Tester->Mode == test_mode::Testing);

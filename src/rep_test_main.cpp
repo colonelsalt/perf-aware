@@ -14,6 +14,7 @@ struct test_function
 
 test_function TestFunctions[] =
 {
+	{"WriteAllBytes", WriteAllBytes},
 	{"fread", FReadTest},
 	{"_read", ReadTest},
 	{"ReadFile", ReadFileTest}
@@ -27,6 +28,7 @@ int main(int ArgC, char** ArgV)
 		return 1;
 	}
 
+	InitOsMetrics();
 	u64 CpuFreq = EstimateCpuFreq(10);
 
 	char* FileName = ArgV[1];
@@ -46,7 +48,6 @@ int main(int ArgC, char** ArgV)
 	}
 
 	rep_tester Testers[ArrayCount(TestFunctions)][alloc_type::Count] = {};
-
 
 	while (true)
 	{

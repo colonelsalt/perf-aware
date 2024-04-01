@@ -58,6 +58,35 @@ static f64 ReferenceHaversine(f64 X0, f64 Y0, f64 X1, f64 Y1)
 
 #include <intrin.h>
 #include <windows.h>
+#include <psapi.h>
+
+struct windows_metrics
+{
+	b32 Initialised;
+	HANDLE ProcessHandle;
+};
+static windows_metrics g_WinMetrics;
+
+static void InitOsMetrics()
+{
+	if (!g_WinMetrics.Initialised)
+	{
+		g_WinMetrics.Initialised = true;
+		g_WinMetrics.ProcessHandle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, GetCurrentProcessId());
+	}
+}
+
+static u64 ReadNumOsPageFaults()
+{
+	Assert(g_WinMetrics.Initialised);
+
+	PROCESS_MEMORY_COUNTERS_EX MemoryCounters = {};
+	MemoryCounters.cb = sizeof(MemoryCounters);
+	GetProcessMemoryInfo(g_WinMetrics.ProcessHandle, (PROCESS_MEMORY_COUNTERS*)&MemoryCounters, sizeof(MemoryCounters));
+
+	return MemoryCounters.PageFaultCount;
+}
+
 
 static u64 GetOSTimerFreq(void)
 {

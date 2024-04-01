@@ -74,6 +74,25 @@ static void Deallocate(read_params* Params, buffer* OutBuffer)
 	}
 }
 
+void WriteAllBytes(rep_tester* Tester, read_params* Params)
+{
+	while (IsStillTesting(Tester))
+	{
+		buffer DestBuffer = Params->DestBuffer;
+		Allocate(Params, &DestBuffer);
+
+		BeginTest(Tester);
+		for (u64 i = 0; i < DestBuffer.Size; i++)
+		{
+			DestBuffer.Memory[i] = (u8)i;
+		}
+		EndTest(Tester);
+
+		AddBytes(Tester, DestBuffer.Size);
+		Deallocate(Params, &DestBuffer);
+	}
+}
+
 void FReadTest(rep_tester* Tester, read_params* Params)
 {
 	while (IsStillTesting(Tester))
