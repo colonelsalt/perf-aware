@@ -74,7 +74,7 @@ static void Deallocate(read_params* Params, buffer* OutBuffer)
 	}
 }
 
-void WriteAllBytes(rep_tester* Tester, read_params* Params)
+void WriteAllBytesC(rep_tester* Tester, read_params* Params)
 {
 	while (IsStillTesting(Tester))
 	{
@@ -92,6 +92,77 @@ void WriteAllBytes(rep_tester* Tester, read_params* Params)
 		Deallocate(Params, &DestBuffer);
 	}
 }
+
+extern "C" void MOVAllBytesASM(u64 Count, u8* Data);
+extern "C" void NOPAllBytesASM(u64 Count);
+extern "C" void CMPAllBytesASM(u64 Count);
+extern "C" void DECAllBytesASM(u64 Count);
+#pragma comment (lib, "asm_loop")
+
+void WriteAllBytes(rep_tester* Tester, read_params* Params)
+{
+	while (IsStillTesting(Tester))
+	{
+		buffer DestBuffer = Params->DestBuffer;
+		Allocate(Params, &DestBuffer);
+
+		BeginTest(Tester);
+        MOVAllBytesASM(DestBuffer.Size, DestBuffer.Memory);
+		EndTest(Tester);
+
+		AddBytes(Tester, DestBuffer.Size);
+		Deallocate(Params, &DestBuffer);
+	}
+}
+
+void NopAllBytes(rep_tester* Tester, read_params* Params)
+{
+	while (IsStillTesting(Tester))
+	{
+		buffer DestBuffer = Params->DestBuffer;
+		Allocate(Params, &DestBuffer);
+
+		BeginTest(Tester);
+        NOPAllBytesASM(DestBuffer.Size);
+		EndTest(Tester);
+
+		AddBytes(Tester, DestBuffer.Size);
+		Deallocate(Params, &DestBuffer);
+	}
+}
+
+void CmpAllBytes(rep_tester* Tester, read_params* Params)
+{
+	while (IsStillTesting(Tester))
+	{
+		buffer DestBuffer = Params->DestBuffer;
+		Allocate(Params, &DestBuffer);
+
+		BeginTest(Tester);
+        CMPAllBytesASM(DestBuffer.Size);
+		EndTest(Tester);
+
+		AddBytes(Tester, DestBuffer.Size);
+		Deallocate(Params, &DestBuffer);
+	}
+}
+
+void DecAllBytes(rep_tester* Tester, read_params* Params)
+{
+	while (IsStillTesting(Tester))
+	{
+		buffer DestBuffer = Params->DestBuffer;
+		Allocate(Params, &DestBuffer);
+
+		BeginTest(Tester);
+        DECAllBytesASM(DestBuffer.Size);
+		EndTest(Tester);
+
+		AddBytes(Tester, DestBuffer.Size);
+		Deallocate(Params, &DestBuffer);
+	}
+}
+
 
 void FReadTest(rep_tester* Tester, read_params* Params)
 {

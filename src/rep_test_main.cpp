@@ -14,10 +14,14 @@ struct test_function
 
 test_function TestFunctions[] =
 {
-	{"WriteAllBytes", WriteAllBytes},
-	{"fread", FReadTest},
-	{"_read", ReadTest},
-	{"ReadFile", ReadFileTest}
+	{"WriteAllBytesC", WriteAllBytesC},
+    {"WriteAllBytes", WriteAllBytes},
+    {"NopAllBytes", NopAllBytes},
+    {"CmpAllBytes", CmpAllBytes},
+    {"DecAllBytes", DecAllBytes}
+	//{"fread", FReadTest},
+	//{"_read", ReadTest},
+	//{"ReadFile", ReadFileTest}
 };
 
 int main(int ArgC, char** ArgV)
