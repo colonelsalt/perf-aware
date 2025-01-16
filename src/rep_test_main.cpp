@@ -6,34 +6,53 @@
 #include "rep_tester.cpp"
 #include "read_file_test.cpp"
 
+typedef void asm_func(u64 Count, u8 *Data);
+
+extern "C" void NOP3x1AllBytes(u64 Count, u8 *Data);
+extern "C" void NOP1x3AllBytes(u64 Count, u8 *Data);
+extern "C" void NOP1x9AllBytes(u64 Count, u8 *Data);
+#pragma comment (lib, "asm_nops")
+
 struct test_function
 {
-	const char* Name;
-	read_testing_func* Function;
+    char const* Name;
+    asm_func* Function;
 };
-
 test_function TestFunctions[] =
 {
-	{"WriteAllBytesC", WriteAllBytesC},
-    {"WriteAllBytes", WriteAllBytes},
-    {"NopAllBytes", NopAllBytes},
-    {"CmpAllBytes", CmpAllBytes},
-    {"DecAllBytes", DecAllBytes}
-	//{"fread", FReadTest},
-	//{"_read", ReadTest},
-	//{"ReadFile", ReadFileTest}
+    {"NOP3x1AllBytes", NOP3x1AllBytes},
+    {"NOP1x3AllBytes", NOP1x3AllBytes},
+    {"NOP1x9AllBytes", NOP1x9AllBytes},
 };
+
+buffer MallocBuff(u64 Size)
+{
+    buffer Result;
+    Result.Memory = (u8*)malloc(Size);
+    Result.Size = Size;
+    return Result;
+}
+
+void FreeBuff(buffer* Buffer)
+{
+    if (Buffer->Memory)
+    {
+        free(Buffer->Memory);
+    }
+    *Buffer = {};
+}
 
 int main(int ArgC, char** ArgV)
 {
+    InitOsMetrics();
+	u64 CpuFreq = EstimateCpuFreq(10);
+
+#if 0
 	if (ArgC != 2)
 	{
 		printf("Usage, homie.\n");
 		return 1;
 	}
-
-	InitOsMetrics();
-	u64 CpuFreq = EstimateCpuFreq(10);
 
 	char* FileName = ArgV[1];
 
@@ -50,27 +69,29 @@ int main(int ArgC, char** ArgV)
 		printf("Failed to allocate buffer of size %llu for file %s\n", Params.DestBuffer.Size, FileName);
 		return 1;
 	}
+#endif
 
-	rep_tester Testers[ArrayCount(TestFunctions)][alloc_type::Count] = {};
+	rep_tester Testers[ArrayCount(TestFunctions)] = {};
+    buffer Buffer = MallocBuff(GIGABYTE);
 
 	while (true)
 	{
 		for (u32 i = 0; i < ArrayCount(TestFunctions); i++)
 		{
-			for (u32 AllocType = alloc_type::None; AllocType < alloc_type::Count; AllocType++)
-			{
-				Params.AllocType = (alloc_type)AllocType;
+            rep_tester* Tester = &Testers[i];
+            test_function TestFunc = TestFunctions[i];
 
-				rep_tester* Tester = &Testers[i][AllocType];
-				test_function TestFunc = TestFunctions[i];
-
-				printf("\n--- %s%s%s ---\n",
-				       TestFunc.Name,
-				       AllocType ? " + " : "",
-				       GetAllocName(Params.AllocType));
-				InitTestWave(Tester, Params.DestBuffer.Size, CpuFreq, 10);
-				TestFunc.Function(Tester, &Params);
-			}
+            printf("\n--- %s ---\n", TestFunc.Name);
+            InitTestWave(Tester, Buffer.Size, CpuFreq, 10);
+            
+            while (IsStillTesting(Tester))
+            {
+                BeginTest(Tester);
+                TestFunc.Function(Buffer.Size, Buffer.Memory);
+                EndTest(Tester);
+                AddBytes(Tester, Buffer.Size);
+            }
+			
 		}
 	}
 }

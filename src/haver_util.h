@@ -16,6 +16,11 @@ typedef int32_t b32;
 typedef int64_t s64;
 typedef uint64_t u64;
 
+static constexpr u64 KILOBYTE = 1'024;
+static constexpr u64 MEGABYTE = 1'024 * KILOBYTE;
+static constexpr u64 GIGABYTE = 1'024 * MEGABYTE;
+
+
 static constexpr f64 EARTH_RADIUS = 6'372.8;
 
 struct buffer
