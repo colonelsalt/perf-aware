@@ -65,6 +65,9 @@ static f64 ReferenceHaversine(f64 X0, f64 Y0, f64 X1, f64 Y1)
 #include <windows.h>
 #include <psapi.h>
 
+#pragma comment (lib, "advapi32.lib")
+#pragma comment (lib, "bcrypt.lib")
+
 struct windows_metrics
 {
 	b32 Initialised;
@@ -105,6 +108,38 @@ static u64 ReadOSTimer(void)
 	LARGE_INTEGER Value;
 	QueryPerformanceCounter(&Value);
 	return Value.QuadPart;
+}
+
+static u64 GetMaxOsRandomCount()
+{
+    return 0xFF'FF'FF'FF;
+}
+
+static b32 ReadRandomBytesWinOs(u64 Count, void* Dest)
+{
+    b32 Result = false;
+    if (Count < GetMaxOsRandomCount())
+    {
+        Result = BCryptGenRandom(0, (BYTE*)Dest, (u32)Count, BCRYPT_USE_SYSTEM_PREFERRED_RNG) != 0;
+    }
+    return Result;
+}
+
+inline void FillRandom(buffer Dest)
+{
+    u64 MaxRandom = GetMaxOsRandomCount();
+    u64 Offset = 0;
+    while (Offset < Dest.Size)
+    {
+        u64 BytesRead = Dest.Size - Offset;
+        if (BytesRead > MaxRandom)
+        {
+            BytesRead = MaxRandom;
+        }
+
+        ReadRandomBytesWinOs(BytesRead, Dest.Memory + Offset);
+        Offset += BytesRead;
+    }
 }
 
 static u64 EstimateCpuFreq(u64 MsToWait)
