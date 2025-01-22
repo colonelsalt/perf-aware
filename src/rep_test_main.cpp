@@ -8,15 +8,11 @@
 
 typedef void asm_func(u64 Count, u8 *Data);
 
-extern "C" void Read_x1(u64 Count, u8 *Data);
-extern "C" void Read_x2(u64 Count, u8 *Data);
-extern "C" void Read_x3(u64 Count, u8 *Data);
-extern "C" void Read_x4(u64 Count, u8 *Data);
-extern "C" void Write_x1(u64 Count, u8* Data);
-extern "C" void Write_x2(u64 Count, u8* Data);
-extern "C" void Write_x3(u64 Count, u8* Data);
-extern "C" void Write_x4(u64 Count, u8* Data);
-#pragma comment (lib, "asm_read_write_ports")
+extern "C" void Read_4x2(u64 Count, u8 *Data);
+extern "C" void Read_8x2(u64 Count, u8 *Data);
+extern "C" void Read_16x2(u64 Count, u8 *Data);
+extern "C" void Read_32x2(u64 Count, u8 *Data);
+#pragma comment (lib, "asm_read_widths")
 
 struct test_function
 {
@@ -25,14 +21,10 @@ struct test_function
 };
 test_function TestFunctions[] =
 {
-    {"Read_x1", Read_x1},
-    {"Read_x2", Read_x2},
-    {"Read_x3", Read_x3},
-    {"Read_x4", Read_x4},
-    {"Write_x1", Write_x1},
-    {"Write_x2", Write_x2},
-    {"Write_x3", Write_x3},
-    {"Write_x4", Write_x4},
+    {"Read_4x2", Read_4x2},
+    {"Read_8x2", Read_8x2},
+    {"Read_16x2", Read_16x2},
+    {"Read_32x2", Read_32x2},
 };
 
 buffer MallocBuff(u64 Size)
@@ -83,8 +75,7 @@ int main(int ArgC, char** ArgV)
 #endif
 
     rep_tester Testers[ArrayCount(TestFunctions)] = {};
-    buffer Buffer = MallocBuff(4 * KILOBYTE);
-    u64 RepeatCount = GIGABYTE;
+    buffer Buffer = MallocBuff(GIGABYTE);
 
 	while (true)
 	{
