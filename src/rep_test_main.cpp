@@ -8,26 +8,15 @@
 
 typedef void asm_func(u64 Count, u8 *Data);
 
-extern "C" void NOP3x1AllBytes(u64 Count, u8 *Data);
-extern "C" void NOP1x3AllBytes(u64 Count, u8 *Data);
-extern "C" void NOP1x9AllBytes(u64 Count, u8 *Data);
-#pragma comment (lib, "asm_nops")
-
-enum branching_pattern
-{
-    BPattern_NeverTaken,
-    BPattern_AlwaysTaken,
-    BPattern_Every2,
-    BPattern_Every3,
-    BPattern_Every4,
-    BPattern_CrtRandom,
-    BPattern_OsRandom,
-
-    BPattern_Count
-};
-
-extern "C" void ConditionalNOP(u64 Count, u8 *Data);
-#pragma comment (lib, "asm_conditional_nop")
+extern "C" void Read_x1(u64 Count, u8 *Data);
+extern "C" void Read_x2(u64 Count, u8 *Data);
+extern "C" void Read_x3(u64 Count, u8 *Data);
+extern "C" void Read_x4(u64 Count, u8 *Data);
+extern "C" void Write_x1(u64 Count, u8* Data);
+extern "C" void Write_x2(u64 Count, u8* Data);
+extern "C" void Write_x3(u64 Count, u8* Data);
+extern "C" void Write_x4(u64 Count, u8* Data);
+#pragma comment (lib, "asm_read_write_ports")
 
 struct test_function
 {
@@ -36,7 +25,14 @@ struct test_function
 };
 test_function TestFunctions[] =
 {
-    {"Conditional NOP", ConditionalNOP},
+    {"Read_x1", Read_x1},
+    {"Read_x2", Read_x2},
+    {"Read_x3", Read_x3},
+    {"Read_x4", Read_x4},
+    {"Write_x1", Write_x1},
+    {"Write_x2", Write_x2},
+    {"Write_x3", Write_x3},
+    {"Write_x4", Write_x4},
 };
 
 buffer MallocBuff(u64 Size)
@@ -55,73 +51,6 @@ void FreeBuff(buffer* Buffer)
     }
     *Buffer = {};
 }
-
-static const char* FillWithPattern(branching_pattern Pattern, buffer Buffer)
-{
-    const char* PatternName = "UNKNOWN";
-
-    if (Pattern == BPattern_OsRandom)
-    {
-        PatternName = "OS random";
-        FillRandom(Buffer);
-    }
-
-    else
-    {
-        for (u64 i = 0; i < Buffer.Size; i++)
-        {
-            u8 Value = 0;
-            switch (Pattern)
-            {
-                case BPattern_NeverTaken:
-                {
-                    PatternName = "Never taken";
-                    Value = 0;
-                } break;
-
-                case BPattern_AlwaysTaken:
-                {
-                    PatternName = "Always taken";
-                    Value = 1;
-                } break;
-
-                case BPattern_Every2:
-                {
-                    PatternName = "Every 2";
-                    Value = (i % 2 == 0);
-                } break;
-
-                case BPattern_Every3:
-                {
-                    PatternName = "Every 3";
-                    Value = (i % 3 == 0);
-                } break;
-
-                case BPattern_Every4:
-                {
-                    PatternName = "Every 4";
-                    Value = (i % 4 == 0);
-                } break;
-
-                case BPattern_CrtRandom:
-                {
-                    PatternName = "CRT random";
-                    Value = (u8)rand();
-                } break;
-
-                default:
-                {
-                    fprintf(stderr, "Invalid branching pattern\n");
-                } break;
-            }
-
-            Buffer.Memory[i] = Value;
-        }
-    }
-
-    return PatternName;
-}
-
 
 
 int main(int ArgC, char** ArgV)
@@ -153,31 +82,26 @@ int main(int ArgC, char** ArgV)
 	}
 #endif
 
-    rep_tester Testers[BPattern_Count][ArrayCount(TestFunctions)] = {};
-    buffer Buffer = MallocBuff(GIGABYTE);
+    rep_tester Testers[ArrayCount(TestFunctions)] = {};
+    buffer Buffer = MallocBuff(4 * KILOBYTE);
+    u64 RepeatCount = GIGABYTE;
 
 	while (true)
 	{
-        for (u32 i = 0; i < BPattern_Count; i++)
+        for (u32 i = 0; i < ArrayCount(TestFunctions); i++)
         {
-            branching_pattern Pattern = (branching_pattern)i;
-            const char* PatternName = FillWithPattern(Pattern, Buffer);
+            rep_tester* Tester = &Testers[i];
+            test_function TestFunc = TestFunctions[i];
 
-            for (u32 j = 0; j < ArrayCount(TestFunctions); j++)
-            {
-                rep_tester* Tester = &Testers[i][j];
-                test_function TestFunc = TestFunctions[j];
-
-                printf("\n--- %s, %s ---\n", TestFunc.Name, PatternName);
-                InitTestWave(Tester, Buffer.Size, CpuFreq, 10);
+            printf("\n--- %s ---\n", TestFunc.Name);
+            InitTestWave(Tester, Buffer.Size, CpuFreq, 10);
             
-                while (IsStillTesting(Tester))
-                {
-                    BeginTest(Tester);
-                    TestFunc.Function(Buffer.Size, Buffer.Memory);
-                    EndTest(Tester);
-                    AddBytes(Tester, Buffer.Size);
-                }
+            while (IsStillTesting(Tester))
+            {
+                BeginTest(Tester);
+                TestFunc.Function(Buffer.Size, Buffer.Memory);
+                EndTest(Tester);
+                AddBytes(Tester, Buffer.Size);
             }
         }
 	}
