@@ -8,11 +8,13 @@
 
 typedef void asm_func(u64 Count, u8 *Data);
 
-extern "C" void Read_4x2(u64 Count, u8 *Data);
-extern "C" void Read_8x2(u64 Count, u8 *Data);
-extern "C" void Read_16x2(u64 Count, u8 *Data);
-extern "C" void Read_32x2(u64 Count, u8 *Data);
-#pragma comment (lib, "asm_read_widths")
+extern "C" void Read_48K(u64 Count, u8 *Data);
+extern "C" void Read_1M(u64 Count, u8 *Data);
+extern "C" void Read_16M(u64 Count, u8 *Data);
+extern "C" void Read_32M(u64 Count, u8 *Data);
+extern "C" void Read_64M(u64 Count, u8 *Data);
+extern "C" void Read_1G(u64 Count, u8 *Data);
+#pragma comment (lib, "asm_cache_bandwidth_tests")
 
 struct test_function
 {
@@ -21,10 +23,12 @@ struct test_function
 };
 test_function TestFunctions[] =
 {
-    {"Read_4x2", Read_4x2},
-    {"Read_8x2", Read_8x2},
-    {"Read_16x2", Read_16x2},
-    {"Read_32x2", Read_32x2},
+    {"Read_48K", Read_48K},
+    {"Read_1M", Read_1M},
+    {"Read_16M", Read_16M},
+    {"Read_32M", Read_32M},
+    {"Read_64M", Read_64M},
+    {"Read_1G", Read_1G},
 };
 
 buffer MallocBuff(u64 Size)
