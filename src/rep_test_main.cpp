@@ -8,8 +8,8 @@
 
 typedef void asm_func(u64 Count, u8 *Data);
 
-extern "C" void Read_256(u64 Count, u8 *Data, u64 Mask);
-#pragma comment (lib, "asm_cache_bandwidth_tests")
+extern "C" void Read_Arbitrary(u64 OuterLoopCount, u8 *Data, u64 InnerLoopCount);
+#pragma comment (lib, "asm_nonp2_cache_test")
 
 struct test_function
 {
@@ -76,41 +76,60 @@ int main(int ArgC, char** ArgV)
 	}
 #endif
 
-    rep_tester Testers[30] = {};
+    constexpr u64 NumBigTests = 10;
+    constexpr u64 NumSmallTests = 5;
+    constexpr u64 NumTotalTests = NumBigTests * NumSmallTests;
+
+    rep_tester Testers[NumTotalTests] = {};
     buffer Buffer = MallocBuff(GIGABYTE);
-    u32 MinSizeP2 = 10;
+    u32 MinSizeP2 = 14;
 
-    for (u32 SizeP2 = MinSizeP2; SizeP2 < ArrayCount(Testers); SizeP2++)
+    u64 RealSizes[NumTotalTests] = {};
+    u64 BucketSizes[NumTotalTests] = {};
+
+    for (u32 BigSizeIndex = 0; BigSizeIndex < NumBigTests; BigSizeIndex++)
     {
-        rep_tester* Tester = Testers + SizeP2;
-
-        u64 Size = 1ULL << SizeP2;
-        u64 Mask = Size - 1;
-
-        //printf("\n--- %s ---\n", TestFunc.Name);
-        printf("--- Read256 of %lluKB ---\n", Size / 1'024);
-        InitTestWave(Tester, Buffer.Size, CpuFreq, 10);
-            
-        while (IsStillTesting(Tester))
+        u32 SizeP2 = MinSizeP2 + BigSizeIndex;
+        u64 BigSize = 1ULL << SizeP2;
+        u64 SmallSize = BigSize;
+        for (u32 SmallSizeIndex = 0; SmallSizeIndex < NumSmallTests; SmallSizeIndex++)
         {
-            BeginTest(Tester);
-            //TestFunc.Function(Buffer.Size, Buffer.Memory);
-            Read_256(Buffer.Size, Buffer.Memory, Mask);
-            EndTest(Tester);
-            AddBytes(Tester, Buffer.Size);
+            u64 OuterLoopCount = GIGABYTE / SmallSize;
+            u64 InnerLoopCount = SmallSize / 256;
+            u64 RealSize = OuterLoopCount * SmallSize;
+
+            u32 TotalIndex = NumSmallTests * BigSizeIndex + SmallSizeIndex;
+            RealSizes[TotalIndex] = RealSize;
+            BucketSizes[TotalIndex] = OuterLoopCount;
+            
+            rep_tester* Tester = Testers + TotalIndex;
+            //printf("\n--- %s ---\n", TestFunc.Name);
+            printf("--- Reading %lluKB ---\n", SmallSize / 1'024);
+            InitTestWave(Tester, RealSize, CpuFreq, 10);
+            
+            while (IsStillTesting(Tester))
+            {
+                BeginTest(Tester);
+                //TestFunc.Function(Buffer.Size, Buffer.Memory);
+                Read_Arbitrary(OuterLoopCount, Buffer.Memory, InnerLoopCount);
+                EndTest(Tester);
+                AddBytes(Tester, RealSize);
+            }
+            SmallSize += KILOBYTE;
         }
     }
 
     printf("Region sizes,gb/s\n");
-    for (u32 SizeP2 = MinSizeP2; SizeP2 < ArrayCount(Testers); SizeP2++)
+    for (u32 i = 0; i < NumTotalTests; i++)
     {
-        rep_tester* Tester = Testers + SizeP2;
+        rep_tester* Tester = Testers + i;
 
         rep_values MinValue = Tester->Results.Min;
         f64 Secs = EstimateSecs((f64)MinValue.E[RepValue_CpuTimer], Tester->CpuFreq);
-        f64 Bandwidth = MinValue.E[RepValue_NumBytes] / ((f64)GIGABYTE * Secs);
+        f64 RealSize = (f64)RealSizes[i];
+        f64 Bandwidth = MinValue.E[RepValue_NumBytes] / (RealSize * Secs);
 
-        u64 Size = 1ULL << SizeP2;
+        u64 Size = BucketSizes[i];
         printf("%llu,%f\n", Size, Bandwidth);
     }
 	
