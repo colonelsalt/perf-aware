@@ -8,12 +8,7 @@
 
 typedef void asm_func(u64 Count, u8 *Data);
 
-extern "C" void Read_48K(u64 Count, u8 *Data);
-extern "C" void Read_1M(u64 Count, u8 *Data);
-extern "C" void Read_16M(u64 Count, u8 *Data);
-extern "C" void Read_32M(u64 Count, u8 *Data);
-extern "C" void Read_64M(u64 Count, u8 *Data);
-extern "C" void Read_1G(u64 Count, u8 *Data);
+extern "C" void Read_256(u64 Count, u8 *Data, u64 Mask);
 #pragma comment (lib, "asm_cache_bandwidth_tests")
 
 struct test_function
@@ -21,6 +16,8 @@ struct test_function
     char const* Name;
     asm_func* Function;
 };
+
+#if 0
 test_function TestFunctions[] =
 {
     {"Read_48K", Read_48K},
@@ -30,6 +27,7 @@ test_function TestFunctions[] =
     {"Read_64M", Read_64M},
     {"Read_1G", Read_1G},
 };
+#endif
 
 buffer MallocBuff(u64 Size)
 {
@@ -78,26 +76,42 @@ int main(int ArgC, char** ArgV)
 	}
 #endif
 
-    rep_tester Testers[ArrayCount(TestFunctions)] = {};
+    rep_tester Testers[30] = {};
     buffer Buffer = MallocBuff(GIGABYTE);
+    u32 MinSizeP2 = 10;
 
-	while (true)
-	{
-        for (u32 i = 0; i < ArrayCount(TestFunctions); i++)
-        {
-            rep_tester* Tester = &Testers[i];
-            test_function TestFunc = TestFunctions[i];
+    for (u32 SizeP2 = MinSizeP2; SizeP2 < ArrayCount(Testers); SizeP2++)
+    {
+        rep_tester* Tester = Testers + SizeP2;
 
-            printf("\n--- %s ---\n", TestFunc.Name);
-            InitTestWave(Tester, Buffer.Size, CpuFreq, 10);
+        u64 Size = 1ULL << SizeP2;
+        u64 Mask = Size - 1;
+
+        //printf("\n--- %s ---\n", TestFunc.Name);
+        printf("--- Read256 of %lluKB ---\n", Size / 1'024);
+        InitTestWave(Tester, Buffer.Size, CpuFreq, 10);
             
-            while (IsStillTesting(Tester))
-            {
-                BeginTest(Tester);
-                TestFunc.Function(Buffer.Size, Buffer.Memory);
-                EndTest(Tester);
-                AddBytes(Tester, Buffer.Size);
-            }
+        while (IsStillTesting(Tester))
+        {
+            BeginTest(Tester);
+            //TestFunc.Function(Buffer.Size, Buffer.Memory);
+            Read_256(Buffer.Size, Buffer.Memory, Mask);
+            EndTest(Tester);
+            AddBytes(Tester, Buffer.Size);
         }
-	}
+    }
+
+    printf("Region sizes,gb/s\n");
+    for (u32 SizeP2 = MinSizeP2; SizeP2 < ArrayCount(Testers); SizeP2++)
+    {
+        rep_tester* Tester = Testers + SizeP2;
+
+        rep_values MinValue = Tester->Results.Min;
+        f64 Secs = EstimateSecs((f64)MinValue.E[RepValue_CpuTimer], Tester->CpuFreq);
+        f64 Bandwidth = MinValue.E[RepValue_NumBytes] / ((f64)GIGABYTE * Secs);
+
+        u64 Size = 1ULL << SizeP2;
+        printf("%llu,%f\n", Size, Bandwidth);
+    }
+	
 }

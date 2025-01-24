@@ -14,12 +14,7 @@
 ;  LISTING 150
 ;  ========================================================================
 
-global Read_48K
-global Read_1M
-global Read_16M
-global Read_32M
-global Read_64M
-global Read_1G
+global Read_256
 
 section .text
 
@@ -34,94 +29,35 @@ section .text
 
 ; RCX = first param
 ; RDX = second param
-; R8 = volatile var
+; R8 = third param
 ; R9 = volatile var
 
-Read_48K:
-    xor rax, rax
-	mov r8, rdx
+Read_256:
+    xor r9, r9
+    mov rax, rdx
 	align 64
-.loop:
-    vmovdqu ymm0, [r8]
-    vmovdqu ymm0, [r8 + 32]
-    add rax, 64
-	mov r8, rax
-	and r8, ~0xC000
-	add r8, rdx
-    cmp rax, rcx
-    jb .loop
-    ret
 
-Read_1M:
-    xor rax, rax
-	mov r8, rdx
-	align 64
 .loop:
-    vmovdqu ymm0, [r8]
-    vmovdqu ymm0, [r8 + 32]
-    add rax, 64
-	mov r8, rax
-	and r8, ~0x100000
-	add r8, rdx
-    cmp rax, rcx
-    jb .loop
-    ret
+    ; Read 256 bytes
+    vmovdqu ymm0, [rax]
+    vmovdqu ymm0, [rax + 0x20]
+    vmovdqu ymm0, [rax + 0x40]
+    vmovdqu ymm0, [rax + 0x60]
+    vmovdqu ymm0, [rax + 0x80]
+    vmovdqu ymm0, [rax + 0xa0]
+    vmovdqu ymm0, [rax + 0xc0]
+    vmovdqu ymm0, [rax + 0xe0]
+    
+    ; Advance and mask the read offset
+    add r9, 0x100
+    and r9, r8
 
-Read_16M:
-    xor rax, rax
-	mov r8, rdx
-	align 64
-.loop:
-    vmovdqu ymm0, [r8]
-    vmovdqu ymm0, [r8 + 32]
-    add rax, 64
-	mov r8, rax
-	and r8, ~0x1000000
-	add r8, rdx
-    cmp rax, rcx
-    jb .loop
-    ret
-
-Read_32M:
-    xor rax, rax
-	mov r8, rdx
-	align 64
-.loop:
-    vmovdqu ymm0, [r8]
-    vmovdqu ymm0, [r8 + 32]
-    add rax, 64
-	mov r8, rax
-	and r8, ~0x2000000
-	add r8, rdx
-    cmp rax, rcx
-    jb .loop
-    ret
-	
-Read_64M:
-    xor rax, rax
-	mov r8, rdx
-	align 64
-.loop:
-    vmovdqu ymm0, [r8]
-    vmovdqu ymm0, [r8 + 32]
-    add rax, 64
-	mov r8, rax
-	and r8, ~0x4000000
-	add r8, rdx
-    cmp rax, rcx
-    jb .loop
-    ret
-	
-Read_1G:
-    xor rax, rax
-	mov r8, rdx
-	align 64
-.loop:
-    vmovdqu ymm0, [r8]
-    vmovdqu ymm0, [r8 + 32]
-    add rax, 64
-	mov r8, rax
-	add r8, rdx
-    cmp rax, rcx
-    jb .loop
+    ; Update the read base pointer to point to the new offset
+    mov rax, rdx
+    add rax, r9
+    
+    ; Repeat
+    sub rcx, 0x100
+    jnz .loop
+    
     ret
