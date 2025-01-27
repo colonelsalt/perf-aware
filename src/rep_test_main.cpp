@@ -100,7 +100,7 @@ int main(int ArgC, char** ArgV)
 
             u32 TotalIndex = NumSmallTests * BigSizeIndex + SmallSizeIndex;
             RealSizes[TotalIndex] = RealSize;
-            BucketSizes[TotalIndex] = OuterLoopCount;
+            BucketSizes[TotalIndex] = SmallSize;
             
             rep_tester* Tester = Testers + TotalIndex;
             //printf("\n--- %s ---\n", TestFunc.Name);
