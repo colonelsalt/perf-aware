@@ -29,23 +29,6 @@ test_function TestFunctions[] =
     {"Read_63BOff", Read_63BOff},
 };
 
-buffer MallocBuff(u64 Size)
-{
-    buffer Result;
-    Result.Memory = (u8*)malloc(Size);
-    Result.Size = Size;
-    return Result;
-}
-
-void FreeBuff(buffer* Buffer)
-{
-    if (Buffer->Memory)
-    {
-        free(Buffer->Memory);
-    }
-    *Buffer = {};
-}
-
 
 int main(int ArgC, char** ArgV)
 {
