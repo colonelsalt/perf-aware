@@ -340,6 +340,120 @@ static f64 RadiansFromDegrees(f64 Degrees)
     return Result;
 }
 
+enum maths_func
+{
+    MathsFunc_Sin,
+    MathsFunc_Cos,
+    MathsFunc_ArcSin,
+    MathsFunc_Sqrt,
+
+    MathsFunc_Count
+};
+
+struct maths_func_domain
+{
+    f64 Min[MathsFunc_Count];
+    f64 Max[MathsFunc_Count];
+};
+
+static maths_func_domain s_Domains;
+
+static f64 Sin(f64 Angle)
+{
+    if (Angle < s_Domains.Min[MathsFunc_Sin])
+    {
+        s_Domains.Min[MathsFunc_Sin] = Angle;
+    }
+    if (Angle > s_Domains.Max[MathsFunc_Sin])
+    {
+        s_Domains.Max[MathsFunc_Sin] = Angle;
+    }
+
+    f64 Result = sin(Angle);
+    return Result;
+}
+
+static f64 Cos(f64 Angle)
+{
+    if (Angle < s_Domains.Min[MathsFunc_Cos])
+    {
+        s_Domains.Min[MathsFunc_Cos] = Angle;
+    }
+    if (Angle > s_Domains.Max[MathsFunc_Cos])
+    {
+        s_Domains.Max[MathsFunc_Cos] = Angle;
+    }
+
+    f64 Result = cos(Angle);
+    return Result;
+}
+
+static f64 ArcSin(f64 Sine)
+{
+    if (Sine < s_Domains.Min[MathsFunc_ArcSin])
+    {
+        s_Domains.Min[MathsFunc_ArcSin] = Sine;
+    }
+    if (Sine > s_Domains.Max[MathsFunc_ArcSin])
+    {
+        s_Domains.Max[MathsFunc_ArcSin] = Sine;
+    }
+
+    f64 Result = asin(Sine);
+    return Result;
+}
+
+static f64 SquareRoot(f64 X)
+{
+    if (X < s_Domains.Min[MathsFunc_Sqrt])
+    {
+        s_Domains.Min[MathsFunc_Sqrt] = X;
+    }
+    if (X > s_Domains.Max[MathsFunc_Sqrt])
+    {
+        s_Domains.Max[MathsFunc_Sqrt] = X;
+    }
+
+    f64 Result = sqrt(X);
+    return Result;
+}
+
+static void PrintMathsDomains()
+{
+    printf("Maths function domains:\n");
+
+    for (u32 i = 0; i < MathsFunc_Count; i++)
+    {
+        maths_func Func = (maths_func)i;
+        switch (Func)
+        {
+            case MathsFunc_Sin:
+            {
+                printf("Sin: ");
+            } break;
+
+            case MathsFunc_Cos:
+            {
+                printf("Cos: ");
+            } break;
+
+            case MathsFunc_ArcSin:
+            {
+                printf("ArcSin: ");
+            } break;
+
+
+            case MathsFunc_Sqrt:
+            {
+                printf("SquareRoot: ");
+            } break;
+        }
+
+        printf("[%.2f, %.2f]\n", s_Domains.Min[i], s_Domains.Max[i]);
+    }
+}
+
+
 static f64 ReferenceHaversine(f64 X0, f64 Y0, f64 X1, f64 Y1)
 { 
     f64 lat1 = Y0;
@@ -352,8 +466,8 @@ static f64 ReferenceHaversine(f64 X0, f64 Y0, f64 X1, f64 Y1)
     lat1 = RadiansFromDegrees(lat1);
     lat2 = RadiansFromDegrees(lat2);
     
-    f64 a = Square(sin(dLat/2.0)) + cos(lat1)*cos(lat2)*Square(sin(dLon/2));
-    f64 c = 2.0*asin(sqrt(a));
+    f64 a = Square(Sin(dLat/2.0)) + Cos(lat1)*Cos(lat2)*Square(Sin(dLon/2));
+    f64 c = 2.0*ArcSin(SquareRoot(a));
     
     f64 Result = EARTH_RADIUS * c;
     

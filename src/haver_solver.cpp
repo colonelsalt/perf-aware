@@ -88,6 +88,7 @@ int main(int ArgC, char** ArgV)
         }
 
         PrintCsv(&TestSeries, StatValue_GbPerSec);
+        PrintMathsDomains();
         printf("\nDONE\n");
     }
 
