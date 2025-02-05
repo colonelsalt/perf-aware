@@ -323,8 +323,8 @@ static f64 ReferenceHaversine(f64 X0, f64 Y0, f64 X1, f64 Y1)
     lat1 = RadiansFromDegrees(lat1);
     lat2 = RadiansFromDegrees(lat2);
     
-    f64 a = Square(Sin(dLat/2.0)) + Cos(lat1)*Cos(lat2)*Square(Sin(dLon/2));
-    f64 c = 2.0*ArcSin(SquareRoot(a));
+    f64 a = Square(Sin_Crt(dLat/2.0)) + Cos_Crt(lat1)*Cos_Crt(lat2)*Square(Sin_Crt(dLon/2));
+    f64 c = 2.0*ArcSin_Crt(SquareRoot_Crt(a));
     
     f64 Result = EARTH_RADIUS * c;
     

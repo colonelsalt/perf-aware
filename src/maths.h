@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <cmath>
+#include <intrin.h>
 
 #define ArrayCount(X) (sizeof(X) / sizeof((X)[0]))
 #define Assert(X) {if (!(X)) __debugbreak();}
@@ -52,62 +53,6 @@ enum maths_func
 
 typedef double (*maths_func_ptr)(double Input);
 
-static const char* GetFuncName(maths_func Func)
-{
-    const char* Result = "UNKNOWN";
-    switch (Func)
-    {
-        case MathsFunc_Sin:
-        {
-            Result = "Sin";
-        } break;
-
-        case MathsFunc_Cos:
-        {
-            Result = "Cos";
-        } break;
-
-        case MathsFunc_ArcSin:
-        {
-            Result = "ArcSin";
-        } break;
-
-        case MathsFunc_Sqrt:
-        {
-            Result = "Sqrt";
-        } break;
-    }
-    return Result;
-}
-
-static maths_func_ptr GetReferenceFunction(maths_func Func)
-{
-    maths_func_ptr Result = nullptr;
-    switch (Func)
-    {
-        case MathsFunc_Sin:
-        {
-            Result = sin;
-        } break;
-
-        case MathsFunc_Cos:
-        {
-            Result = cos;
-        } break;
-
-        case MathsFunc_ArcSin:
-        {
-            Result = asin;
-        } break;
-
-        case MathsFunc_Sqrt:
-        {
-            Result = sqrt;
-        } break;
-    }
-    return Result;
-}
-
 struct maths_func_domain
 {
     f64 Min[MathsFunc_Count];
@@ -126,63 +71,130 @@ static void InitMathsDomains()
     }
 }
 
-static f64 Sin(f64 Angle)
+static f64 Sin_Crt(f64 Angle)
 {
-    if (Angle < s_Domains.Min[MathsFunc_Sin])
-    {
-        s_Domains.Min[MathsFunc_Sin] = Angle;
-    }
-    if (Angle > s_Domains.Max[MathsFunc_Sin])
-    {
-        s_Domains.Max[MathsFunc_Sin] = Angle;
-    }
+    //if (Angle < s_Domains.Min[MathsFunc_Sin])
+    //{
+    //    s_Domains.Min[MathsFunc_Sin] = Angle;
+    //}
+    //if (Angle > s_Domains.Max[MathsFunc_Sin])
+    //{
+    //    s_Domains.Max[MathsFunc_Sin] = Angle;
+    //}
 
     f64 Result = sin(Angle);
     return Result;
 }
 
-static f64 Cos(f64 Angle)
+static f64 Sin_Sondie(f64 Angle)
 {
-    if (Angle < s_Domains.Min[MathsFunc_Cos])
-    {
-        s_Domains.Min[MathsFunc_Cos] = Angle;
-    }
-    if (Angle > s_Domains.Max[MathsFunc_Cos])
-    {
-        s_Domains.Max[MathsFunc_Cos] = Angle;
-    }
+    f64 Result = Angle;
+    return Result;
+}
+
+static f64 Cos_Crt(f64 Angle)
+{
+    //if (Angle < s_Domains.Min[MathsFunc_Cos])
+    //{
+    //    s_Domains.Min[MathsFunc_Cos] = Angle;
+    //}
+    //if (Angle > s_Domains.Max[MathsFunc_Cos])
+    //{
+    //    s_Domains.Max[MathsFunc_Cos] = Angle;
+    //}
 
     f64 Result = cos(Angle);
     return Result;
 }
 
-static f64 ArcSin(f64 Sine)
+static f64 Cos_Sondie(f64 Angle)
 {
-    if (Sine < s_Domains.Min[MathsFunc_ArcSin])
-    {
-        s_Domains.Min[MathsFunc_ArcSin] = Sine;
-    }
-    if (Sine > s_Domains.Max[MathsFunc_ArcSin])
-    {
-        s_Domains.Max[MathsFunc_ArcSin] = Sine;
-    }
+    f64 Result = Angle;
+    return Result;
+}
+
+static f64 ArcSin_Crt(f64 Sine)
+{
+    //if (Sine < s_Domains.Min[MathsFunc_ArcSin])
+    //{
+    //    s_Domains.Min[MathsFunc_ArcSin] = Sine;
+    //}
+    //if (Sine > s_Domains.Max[MathsFunc_ArcSin])
+    //{
+    //    s_Domains.Max[MathsFunc_ArcSin] = Sine;
+    //}
 
     f64 Result = asin(Sine);
     return Result;
 }
 
-static f64 SquareRoot(f64 X)
+static f64 ArcSin_Sondie(f64 Sine)
 {
-    if (X < s_Domains.Min[MathsFunc_Sqrt])
-    {
-        s_Domains.Min[MathsFunc_Sqrt] = X;
-    }
-    if (X > s_Domains.Max[MathsFunc_Sqrt])
-    {
-        s_Domains.Max[MathsFunc_Sqrt] = X;
-    }
+    f64 Result = Sine;
+    return Result;
+}
+
+static f64 SquareRoot_Crt(f64 X)
+{
+    //if (X < s_Domains.Min[MathsFunc_Sqrt])
+    //{
+    //    s_Domains.Min[MathsFunc_Sqrt] = X;
+    //}
+    //if (X > s_Domains.Max[MathsFunc_Sqrt])
+    //{
+    //    s_Domains.Max[MathsFunc_Sqrt] = X;
+    //}
 
     f64 Result = sqrt(X);
+    return Result;
+}
+
+static f64 SquareRoot_Sondie(f64 X)
+{
+    __m128d Xmm = _mm_set_sd(X);
+    __m128d Zero = _mm_set_sd(0);
+    __m128d Sqrt = _mm_sqrt_sd(Zero, Xmm);
+
+    f64 Result = _mm_cvtsd_f64(Sqrt);
+    return Result;
+}
+
+struct maths_func_spec
+{
+    const char* Name;
+    maths_func_ptr RefFunc;
+    maths_func_ptr CustomFunc;
+
+    f64 MinInput;
+    f64 MaxInput;
+};
+
+static maths_func_spec GetFuncSpec(maths_func Func)
+{
+    maths_func_spec Result = {};
+    switch (Func)
+    {
+        case MathsFunc_Sin:
+        {
+            Result = { "Sin", sin, Sin_Sondie, -3.13, 3.13 };
+        } break;
+
+        case MathsFunc_Cos:
+        {
+            Result = { "Cos", cos, Cos_Sondie, -1.57, 1.57 };
+        } break;
+
+        case MathsFunc_ArcSin:
+        {
+            Result = { "ArcSin", asin, ArcSin_Sondie, 0.00, 1.00 };
+        } break;
+
+        case MathsFunc_Sqrt:
+        {
+            Result = { "Sqrt", sqrt, SquareRoot_Sondie, 0.00, 1.00 };
+        } break;
+    }
+
     return Result;
 }
 
@@ -193,7 +205,7 @@ static void PrintMathsDomains()
     for (u32 i = 0; i < MathsFunc_Count; i++)
     {
         maths_func Func = (maths_func)i;
-        const char* Name = GetFuncName(Func);
+        const char* Name = GetFuncSpec(Func).Name;
 
         printf("%s: [%.2f, %.2f]\n", Name, s_Domains.Min[i], s_Domains.Max[i]);
     }

@@ -40,28 +40,33 @@ test_cases GetTestCases(maths_func Func)
 
 int main(int ArgC, char** ArgV)
 {
+    static constexpr u32 NUM_ITERATIONS = 10'000;
+
     for (u32 i = 0; i < MathsFunc_Count; i++)
     {
         f64 MaxError = 0.0;
+        f64 MaxErrorVal = 0.0;
 
-        maths_func Func = (maths_func)i;
-        maths_func_ptr FuncPtr = GetReferenceFunction(Func);
-        const char* Name = GetFuncName(Func);
-
-        test_cases TestCases = GetTestCases(Func);
-        for (u32 j = 0; j < TestCases.N; j++)
+        maths_func FuncEnum = (maths_func)i;
+        maths_func_spec Spec = GetFuncSpec(FuncEnum);
+        
+        for (u32 j = 0; j < NUM_ITERATIONS; j++)
         {
-            maths_func_test Test = TestCases.Tests[j];
+            f64 t = (f64)j / (f64)(NUM_ITERATIONS - 1);
+            f64 Input = (1 - t) * Spec.MinInput + t * Spec.MaxInput;
 
-            f64 RefOutput = FuncPtr(Test.Input);
-            f64 Error = Abs(Test.Output - RefOutput);
+            f64 RefOutput = Spec.RefFunc(Input);
+            f64 CustomOutput = Spec.CustomFunc(Input);
+
+            f64 Error = Abs(CustomOutput - RefOutput);
             if (Error > MaxError)
             {
                 MaxError = Error;
+                MaxErrorVal = Input;
             }
         }
 
-        printf("%s - max error: %f\n", Name, MaxError);
+        printf("%s - max error: %f at input %f\n", Spec.Name, MaxError, MaxErrorVal);
     }
 
     printf("DONE\n");

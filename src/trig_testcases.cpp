@@ -1,3 +1,11 @@
+/*
+    Maths function domains:
+    Sin: [-3.13, 3.13]
+    Cos: [-1.57, 1.57]
+    ArcSin: [0.00, 1.00]
+    SquareRoot: [0.00, 1.00]
+*/
+
 struct maths_func_test
 {
     f64 Input;
