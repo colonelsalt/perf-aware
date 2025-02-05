@@ -39,7 +39,6 @@ f64 SumHaverPairs(haver_pair* Pairs, s64 NumPairs)
 	return Mean;
 }
 
-
 int main(int ArgC, char** ArgV)
 {
 	//BeginProfile();
@@ -58,6 +57,8 @@ int main(int ArgC, char** ArgV)
 
     SetRowLabelLabel(&TestSeries, "Test");
     SetRowLabel(&TestSeries, "Haversine");
+
+    InitMathsDomains();
     for (u32 i = 0; i < ArrayCount(TestFunctions); i++)
     {
         test_func Function = TestFunctions[i];
