@@ -19,6 +19,9 @@ static constexpr u64 KILOBYTE = 1'024;
 static constexpr u64 MEGABYTE = 1'024 * KILOBYTE;
 static constexpr u64 GIGABYTE = 1'024 * MEGABYTE;
 
+static constexpr f64 PI = 3.14159265358979323846;
+static constexpr f64 PI_SQUARED = PI * PI;
+
 static f64 Abs(f64 X)
 {
     f64 Result = X;
@@ -88,7 +91,7 @@ static f64 Sin_Crt(f64 Angle)
 
 static f64 Sin_Sondie(f64 Angle)
 {
-    f64 Result = Angle;
+    f64 Result = (-4.0 / PI_SQUARED) * Square(Angle) + (4.0 / PI) * Angle;
     return Result;
 }
 
