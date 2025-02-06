@@ -91,7 +91,21 @@ static f64 Sin_Crt(f64 Angle)
 
 static f64 Sin_Sondie(f64 Angle)
 {
-    f64 Result = (-4.0 / PI_SQUARED) * Square(Angle) + (4.0 / PI) * Angle;
+    f64 X = Angle;
+    if (Angle < 0)
+    {
+        X = -Angle;
+    }
+
+    f64 A = (-4.0 / PI_SQUARED);
+    f64 B = (4.0 / PI);
+
+    f64 Result = A * Square(X) +  B * X;
+    if (Angle < 0)
+    {
+        Result = -Result;
+    }
+
     return Result;
 }
 
@@ -112,7 +126,17 @@ static f64 Cos_Crt(f64 Angle)
 
 static f64 Cos_Sondie(f64 Angle)
 {
-    f64 Result = Angle;
+    f64 X = Angle + PI / 2;
+    if (Angle > PI / 2.0)
+    {
+        X = Angle - PI / 2.0;
+    }
+    f64 Result = Sin_Sondie(X);
+    if (Angle > PI / 2.0)
+    {
+        Result = -Result;
+    }
+
     return Result;
 }
 
