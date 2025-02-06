@@ -44,6 +44,26 @@ static f64 RadiansFromDegrees(f64 Degrees)
     return Result;
 }
 
+static f64 ToPower(f64 X, u32 Power)
+{
+    f64 Result = 1.0;
+    for (u32 i = 0; i < Power; i++)
+    {
+        Result *= X;
+    }
+    return Result;
+}
+
+static u32 Factorial(u32 Number)
+{
+    u32 Result = 1;
+    for (Number; Number > 0; Number--)
+    {
+        Result *= Number;
+    }
+    return Result;
+}
+
 enum maths_func
 {
     MathsFunc_Sin,
@@ -106,6 +126,26 @@ static f64 Sin_Sondie(f64 Angle)
         Result = -Result;
     }
 
+    return Result;
+}
+
+static f64 Sin_Taylor(f64 Angle, u32 NumTerms)
+{
+    f64 Result = 0.0;
+    u32 Power = 1;
+    for (u32 i = 0; i < NumTerms; i++)
+    {
+        f64 Coefficient = (f64)Factorial(Power);
+        if (i & 1)
+        {
+            Coefficient = -Coefficient;
+        }
+        f64 NewTerm = ToPower(Angle, Power) / Coefficient;
+        
+        Result += NewTerm;
+
+        Power += 2;
+    }
     return Result;
 }
 

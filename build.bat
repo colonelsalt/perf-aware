@@ -9,7 +9,7 @@ set Defines="/DPROFILER=1"
 REM call cl -nologo -Zi -FC /FC /Zi -FC /I%IncludePath% /I%IncludePath%/shared ..\src\8086-simulator\main.cpp /link /LIBPATH:%LibPath% sim86_shared_debug.lib
 REM call cl -nologo -Zi -FC /FC /Zi -FC ..\src\haver_input.cpp
 REM call cl -nologo -Zi -O2 -FC /FC /Zi -FC ..\src\haver_solver.cpp %Defines%
-call cl -nologo -Zi -O2 -FC /FC /Zi -FC ..\src\trig_test_main.cpp %Defines%
+call cl -nologo -Zi -Od -FC /FC /Zi -FC ..\src\trig_test_main.cpp %Defines%
 REM call cl -nologo -O0 -Zi -FC /FC /Zi -FC ..\src\rep_test_main.cpp
 
 popd
